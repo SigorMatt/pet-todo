@@ -60,6 +60,33 @@ class StoreTest(unittest.TestCase):
                     store.load(self.path)
                 self.assertEqual(cm.exception.path, self.path)
 
+    def test_duplicate_ids_raise_store_error(self):
+        item = {"id": 1, "text": "a", "done": False}
+        bad = [
+            {"next_id": 1, "items": [item, dict(item, text="b")]},
+            {"next_id": 5, "items": [item, dict(item, id=2), dict(item, done=True)]},
+        ]
+        for data in bad:
+            with self.subTest(data=data):
+                self._write(data)
+                with self.assertRaises(store.StoreError) as cm:
+                    store.load(self.path)
+                self.assertEqual(cm.exception.path, self.path)
+
+    def test_remove_with_duplicate_ids_reports_cannot_read(self):
+        from todo import cli
+        data = {"next_id": 1, "items": [{"id": 1, "text": "a", "done": False},
+                                        {"id": 1, "text": "b", "done": False}]}
+        self._write(data)
+        out, err = io.StringIO(), io.StringIO()
+        with mock.patch.dict(os.environ, {"TODO_FILE": self.path}), \
+                contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            self.assertEqual(cli.main(["remove", "1"]), 1)
+        self.assertEqual(out.getvalue(), "")
+        self.assertEqual(err.getvalue(), "todo: cannot read {}\n".format(self.path))
+        with open(self.path) as f:
+            self.assertEqual(json.load(f), data)
+
     def test_extra_keys_are_allowed(self):
         data = {"next_id": 2, "items": [
             {"id": 1, "text": "x", "done": True, "due": "2026-11-20"}]}

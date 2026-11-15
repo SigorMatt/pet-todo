@@ -53,13 +53,20 @@ def _valid_item(item):
 
 
 def _valid(data):
-    """True if data has the list's shape: an int next_id and a list of items."""
+    """True if data has the list's shape: an int next_id and items with unique IDs."""
     return (
         isinstance(data, dict)
         and _is_int(data.get("next_id"))
         and isinstance(data.get("items"), list)
         and all(_valid_item(item) for item in data["items"])
+        and _unique_ids(data["items"])
     )
+
+
+def _unique_ids(items):
+    """True if no two items share an ID."""
+    ids = [item["id"] for item in items]
+    return len(ids) == len(set(ids))
 
 
 def _file_mode(path):
