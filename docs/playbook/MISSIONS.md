@@ -31,6 +31,7 @@ Owned by the lead. Only `room.py` edits the block above (`state set`, `state nex
 - Phase 1 plan: the template's placeholder M1 row was replaced, so missions are M1–M3 (planner's draft numbered them M2–M4).
 - `list --all --overdue` behaves like `list --overdue` (DESIGN: overdue shows only open items).
 - A failed save prints `todo: cannot write <path>` and exits 1 (DESIGN Interfaces: errors start `todo: `, exit 1; cold M1 R1-3).
+- L-2: `load` repairs a bad `next_id` to `max(stored ids)+1` (at least 1) rather than refusing the file; this keeps DESIGN's "IDs are never reused" without a new error message.
 - Today for `list --overdue` is injected through a `today` parameter of `cli.main` (playbook: lead's discretion).
 
 ## Current mission
@@ -51,6 +52,8 @@ Owned by the lead. Only `room.py` edits the block above (`state set`, `state nex
 
 | Task | Branch | Attempt | Status |
 | --- | --- | --- | --- |
+| M2-T1 | builder a62f6a1ec7ed2c6ee (worktree) | 1 | running |
+| M2-T2 | builder a47810d72aee0e554 (worktree) | 1 | running |
 
 ### Parked questions
 
