@@ -6,7 +6,7 @@ lease_generation: 2
 phase: 1
 room: 1
 mission: M2
-step: Qodo round 1
+step: gate
 pr: 3
 cursor: 6897870993
 counter: 0
