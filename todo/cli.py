@@ -110,12 +110,30 @@ _COMMANDS = {
 }
 
 
+_ID_COMMANDS = ("done", "remove")
+
+
+def _protect_id(argv):
+    """Mark a lone ID after done/remove as positional, so ``-x`` is an ID, not an option.
+
+    ``-h`` and ``--help`` are left alone so they still show help.
+    """
+    if (
+        len(argv) == 2
+        and argv[0] in _ID_COMMANDS
+        and argv[1].startswith("-")
+        and argv[1] not in ("-h", "--help")
+    ):
+        return [argv[0], "--", argv[1]]
+    return argv
+
+
 def main(argv=None):
     """Run the todo command line; return the exit status."""
     if argv is None:
         argv = sys.argv[1:]
     try:
-        args = _build_parser().parse_args(argv)
+        args = _build_parser().parse_args(_protect_id(list(argv)))
     except UsageError as exc:
         print("todo: {}".format(exc), file=sys.stderr)
         return 1

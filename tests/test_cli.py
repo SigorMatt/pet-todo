@@ -158,6 +158,24 @@ class NoItemTest(CliTestCase):
         with open(self.path, encoding="utf-8") as f:
             self.assertEqual(f.read(), before)
 
+    def test_dash_id_is_no_item_not_an_option(self):
+        self.run_cli("add", "buy milk")
+        for command in ("done", "remove"):
+            for raw in ("-x", "-1", "--all", "-", "--", "-1x"):
+                with self.subTest(command=command, raw=raw):
+                    self.assertEqual(
+                        self.run_cli(command, raw),
+                        (1, "", "todo: no item {}\n".format(raw)),
+                    )
+
+    def test_help_still_shows_help(self):
+        for command in ("done", "remove"):
+            for flag in ("-h", "--help"):
+                with self.subTest(command=command, flag=flag):
+                    with self.assertRaises(SystemExit) as cm:
+                        self.run_cli(command, flag)
+                    self.assertEqual(cm.exception.code, 0)
+
     def test_unknown_id_on_missing_file(self):
         for command in ("done", "remove"):
             with self.subTest(command=command):
