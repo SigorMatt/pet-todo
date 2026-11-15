@@ -119,6 +119,31 @@ class StoreTest(unittest.TestCase):
                 self.assertEqual(self._mode(self.path), mode)
                 os.unlink(self.path)
 
+    def test_save_fsyncs_temp_file_before_rename(self):
+        calls = []
+        real_fsync, real_replace = os.fsync, os.replace
+
+        def fsync(fd):
+            size = os.fstat(fd).st_size
+            calls.append(("fsync", size))
+            return real_fsync(fd)
+
+        def replace(src, dst):
+            calls.append(("replace", None))
+            return real_replace(src, dst)
+
+        data = {"next_id": 2, "items": [{"id": 1, "text": "x", "done": False}]}
+        with mock.patch("todo.store.os.fsync", side_effect=fsync), \
+                mock.patch("todo.store.os.replace", side_effect=replace):
+            store.save(self.path, data)
+        names = [name for name, _ in calls]
+        self.assertIn("replace", names)
+        first_replace = names.index("replace")
+        before = [size for name, size in calls[:first_replace] if name == "fsync"]
+        expected = len(json.dumps(data)) + 1
+        self.assertIn(expected, before, calls)
+        self.assertEqual(store.load(self.path), data)
+
     def _assert_failed_write_keeps_original(self, target):
         original = {"next_id": 2, "items": [{"id": 1, "text": "old", "done": False}]}
         store.save(self.path, original)

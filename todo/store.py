@@ -76,10 +76,12 @@ def save(path, data):
     mode = _file_mode(target)
     fd, tmp = tempfile.mkstemp(prefix=".todo-", suffix=".tmp", dir=directory)
     try:
-        os.chmod(tmp, mode)
         with os.fdopen(fd, "w", encoding="utf-8") as f:
+            os.chmod(tmp, mode)
             json.dump(data, f)
             f.write("\n")
+            f.flush()
+            os.fsync(f.fileno())
         os.replace(tmp, target)
     except BaseException:
         try:
@@ -87,3 +89,18 @@ def save(path, data):
         except OSError:
             pass
         raise
+    _fsync_directory(directory)
+
+
+def _fsync_directory(directory):
+    """Flush the rename to disk where the platform allows it; best effort."""
+    try:
+        fd = os.open(directory, os.O_RDONLY)
+    except OSError:
+        return
+    try:
+        os.fsync(fd)
+    except OSError:
+        pass
+    finally:
+        os.close(fd)
