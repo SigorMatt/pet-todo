@@ -112,6 +112,13 @@ class StoreTest(unittest.TestCase):
                 self._write({"next_id": next_id, "items": []})
                 self.assertEqual(store.load(self.path)["next_id"], 1)
 
+    def test_negative_stored_ids_still_give_next_id_of_at_least_one(self):
+        item = {"id": -3, "text": "a", "done": False}
+        for next_id in (-4, 0, 1):
+            with self.subTest(next_id=next_id):
+                self._write({"next_id": next_id, "items": [item]})
+                self.assertEqual(store.load(self.path)["next_id"], max(next_id, 1))
+
     def test_higher_next_id_is_kept(self):
         data = {"next_id": 9, "items": [{"id": 3, "text": "x", "done": False}]}
         self._write(data)

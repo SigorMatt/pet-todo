@@ -36,7 +36,7 @@ def load(path):
 
 def _fresh_id(items):
     """The lowest ID above every stored one, and at least 1."""
-    return max((item["id"] for item in items), default=0) + 1
+    return max([0] + [item["id"] for item in items]) + 1
 
 
 def _is_int(value):
