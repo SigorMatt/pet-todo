@@ -73,6 +73,48 @@ class StoreTest(unittest.TestCase):
                     store.load(self.path)
                 self.assertEqual(cm.exception.path, self.path)
 
+    def test_ids_above_max_raise_store_error(self):
+        item = {"id": 1, "text": "a", "done": False}
+        huge = int("9" * 4300)
+        bad = [
+            {"next_id": 1, "items": [dict(item, id=store.MAX_ID + 1)]},
+            {"next_id": 1, "items": [item, dict(item, id=huge)]},
+            {"next_id": store.MAX_ID + 1, "items": []},
+            {"next_id": huge, "items": []},
+        ]
+        for data in bad:
+            with self.subTest(next_id=data["next_id"] > store.MAX_ID):
+                self._write(data)
+                with self.assertRaises(store.StoreError) as cm:
+                    store.load(self.path)
+                self.assertEqual(cm.exception.path, self.path)
+
+    def test_ids_up_to_max_are_allowed(self):
+        self._write({"next_id": 1, "items": [
+            {"id": store.MAX_ID, "text": "a", "done": False}]})
+        self.assertEqual(store.load(self.path)["next_id"], store.MAX_ID + 1)
+
+    def test_add_and_done_with_huge_stored_id_report_cannot_read(self):
+        from todo import cli
+        data = {"next_id": 1, "items": [
+            {"id": 1, "text": "a", "done": False},
+            {"id": int("9" * 4300), "text": "b", "done": False}]}
+        self._write(data)
+        with open(self.path, "rb") as f:
+            before = f.read()
+        for argv in (["add", "c"], ["done", "1"]):
+            with self.subTest(argv=argv):
+                out, err = io.StringIO(), io.StringIO()
+                with mock.patch.dict(os.environ, {"TODO_FILE": self.path}), \
+                        contextlib.redirect_stdout(out), \
+                        contextlib.redirect_stderr(err):
+                    self.assertEqual(cli.main(argv), 1)
+                self.assertEqual(out.getvalue(), "")
+                self.assertEqual(
+                    err.getvalue(), "todo: cannot read {}\n".format(self.path))
+                with open(self.path, "rb") as f:
+                    self.assertEqual(f.read(), before)
+
     def test_remove_with_duplicate_ids_reports_cannot_read(self):
         from todo import cli
         data = {"next_id": 1, "items": [{"id": 1, "text": "a", "done": False},

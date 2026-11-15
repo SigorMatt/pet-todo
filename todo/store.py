@@ -6,6 +6,12 @@ import stat
 import tempfile
 
 
+# The largest stored ID or next_id a valid file may hold: the signed 64-bit
+# maximum. It keeps every ID, and the next_id derived from it, far below
+# json's integer-to-string limit, so a loaded list can always be saved.
+MAX_ID = 2**63 - 1
+
+
 class StoreError(Exception):
     """The list file at ``path`` could not be read."""
 
@@ -43,10 +49,15 @@ def _is_int(value):
     return isinstance(value, int) and not isinstance(value, bool)
 
 
+def _is_id(value):
+    """True for an int no larger than MAX_ID."""
+    return _is_int(value) and value <= MAX_ID
+
+
 def _valid_item(item):
     return (
         isinstance(item, dict)
-        and _is_int(item.get("id"))
+        and _is_id(item.get("id"))
         and isinstance(item.get("text"), str)
         and isinstance(item.get("done"), bool)
     )
@@ -56,7 +67,7 @@ def _valid(data):
     """True if data has the list's shape: an int next_id and items with unique IDs."""
     return (
         isinstance(data, dict)
-        and _is_int(data.get("next_id"))
+        and _is_id(data.get("next_id"))
         and isinstance(data.get("items"), list)
         and all(_valid_item(item) for item in data["items"])
         and _unique_ids(data["items"])
