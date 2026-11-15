@@ -10,7 +10,7 @@ step: PR
 pr: none
 cursor: none
 counter: 0
-intent: none
+intent: open PR mission/M1-store-add-list
 waiting_for_owner: no
 status: running
 mission_started: 2026-11-15T16:27:57Z
