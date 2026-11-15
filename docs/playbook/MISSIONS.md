@@ -10,7 +10,7 @@ step: PR
 pr: none
 cursor: 6898483510
 counter: 0
-intent: none
+intent: open PR mission/M3-due-overdue
 waiting_for_owner: no
 status: running
 mission_started: 2026-11-15T18:19:07Z
