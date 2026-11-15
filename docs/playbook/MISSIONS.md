@@ -23,7 +23,7 @@ Owned by the lead. Only `room.py` edits the block above (`state set`, `state nex
 | Mission | Branch | Status | PR | Criteria |
 | --- | --- | --- | --- | --- |
 | M1 | `mission/M1-store-add-list` | merged | #2 (12d2b13) | P1-1 (also makes `main` green) |
-| M2 | `mission/M2-done-remove` | planned | | P1-2 |
+| M2 | `mission/M2-done-remove` | in progress | | P1-2 |
 | M3 | `mission/M3-due-overdue` | planned | | P1-3 |
 
 ## Lead decisions
@@ -35,7 +35,17 @@ Owned by the lead. Only `room.py` edits the block above (`state set`, `state nex
 
 ## Current mission
 
-- none (M1 merged as 12d2b13; M2 next)
+- **Mission:** M2, `mission/M2-done-remove`.
+- **Scope:** Add the `done ID` and `remove ID` commands to `python3 -m todo`, as in DESIGN.md Interfaces. `list` hides done items unless `--all`, which shows `[x]`. IDs are never reused after a removal, including when the stored `next_id` is too low or invalid (L-2).
+- **Criteria:**
+  - P1-2 a: `done ID` prints `done <id>`, `list` hides it, `list --all` shows `[x]`; doing it twice is not an error (unittest in `tests/test_cli.py`).
+  - P1-2 b: `remove ID` prints `removed <id>`; after removing the highest ID, the next `add` gets a new ID (unittest).
+  - P1-2 c: an unknown ID (and a non-integer ID) prints `todo: no item <id>` and exits 1 for both commands (unittest).
+- **Ledger items:** L-2 (`load` accepts a `next_id` not above every stored ID, or below 1).
+- **Spec revision:** 45f27de060f74f758513aea77cd1487419202b10, pipeline main.
+- **Tasks:**
+  - T1 done/remove: `todo/cli.py`, `todo/store.py` if needed, `tests/test_cli.py`. Done when: P1-2 a–c unittests pass and the full suite is green.
+  - T2 L-2: `todo/store.py`, `tests/test_store.py`. `load` never yields a `next_id` at or below a stored ID or below 1 (repair to `max(id)+1`, at least 1). Done when: a unittest with a hand-edited file (`next_id` 1 with item 3; `next_id` 0; missing) shows `add` hands out a fresh ID, and the full suite is green.
 
 ### Tasks in flight
 
