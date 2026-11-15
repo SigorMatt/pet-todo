@@ -6,11 +6,11 @@ lease_generation: 1
 phase: 1
 room: 1
 mission: M1
-step: PR
-pr: none
+step: Qodo first review
+pr: 2
 cursor: none
 counter: 0
-intent: open PR mission/M1-store-add-list
+intent: none
 waiting_for_owner: no
 status: running
 mission_started: 2026-11-15T16:27:57Z
