@@ -22,7 +22,6 @@ Owned by the lead. Only `room.py` edits the block above (`state set`, `state nex
 
 | Mission | Branch | Status | PR | Criteria |
 | --- | --- | --- | --- | --- |
-| M1-A | builder (foreground) | 1 | running |
 | M1 | `mission/M1-store-add-list` | in progress | | P1-1 (also makes `main` green) |
 | M2 | `mission/M2-done-remove` | planned | | P1-2 |
 | M3 | `mission/M3-due-overdue` | planned | | P1-3 |
@@ -52,6 +51,7 @@ Owned by the lead. Only `room.py` edits the block above (`state set`, `state nex
 
 | Task | Branch | Attempt | Status |
 | --- | --- | --- | --- |
+| M1-A | builder (foreground) | 1 | running |
 
 ### Parked questions
 
