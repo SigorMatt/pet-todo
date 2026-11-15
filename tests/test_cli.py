@@ -143,6 +143,21 @@ class NoItemTest(CliTestCase):
         with open(self.path, encoding="utf-8") as f:
             self.assertEqual(f.read(), before)
 
+    def test_id_must_be_plain_ascii_digits(self):
+        for text in ("a", "b", "c"):
+            self.run_cli("add", text)
+        with open(self.path, encoding="utf-8") as f:
+            before = f.read()
+        for command in ("done", "remove"):
+            for raw in (" 1", "1 ", "+2", "\u0663", "1_0", "\uff11"):
+                with self.subTest(command=command, raw=raw):
+                    self.assertEqual(
+                        self.run_cli(command, raw),
+                        (1, "", "todo: no item {}\n".format(raw)),
+                    )
+        with open(self.path, encoding="utf-8") as f:
+            self.assertEqual(f.read(), before)
+
     def test_unknown_id_on_missing_file(self):
         for command in ("done", "remove"):
             with self.subTest(command=command):
