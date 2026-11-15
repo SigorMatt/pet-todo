@@ -1,4 +1,5 @@
 """Parse arguments, call the store and print results."""
+# Drill (M6 rehearsal): an owner change pushed after the review; the gate must refuse it until it is reviewed.
 
 import argparse
 import datetime
