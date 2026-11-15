@@ -33,6 +33,7 @@ Owned by the lead. Only `room.py` edits the block above (`state set`, `state nex
 - A failed save prints `todo: cannot write <path>` and exits 1 (DESIGN Interfaces: errors start `todo: `, exit 1; cold M1 R1-3).
 - L-2: `load` repairs a bad `next_id` to `max(stored ids)+1` (at least 1) rather than refusing the file; this keeps DESIGN's "IDs are never reused" without a new error message. A missing or non-integer `next_id` still reads as `todo: cannot read <path>` (existing shape check kept; M2-T2 question).
 - For `done` and `remove`, a single argument is always the ID, including `-h`/`--help`, which give `todo: no item <arg>`; `todo -h`, `add -h` and `list -h` still show help (cold M2 R1-2; the earlier choice to keep `done -h` as help failed audit twice).
+- Stored item IDs must be 1..MAX_ID (2**63-1) and `next_id` at most MAX_ID+1, else `todo: cannot read`; an `add` past MAX_ID prints `todo: cannot write <path>` (qodo PR #3 findings on negative and large IDs).
 - Today for `list --overdue` is injected through a `today` parameter of `cli.main` (playbook: lead's discretion).
 
 ## Current mission
@@ -57,6 +58,7 @@ Owned by the lead. Only `room.py` edits the block above (`state set`, `state nex
 | M2-T2 | builder a47810d72aee0e554 (worktree) | 1 | merged 3759fc6 |
 | M2-FIX1 (R1-1, R1-2) | builder a62f6a1ec7ed2c6ee (resumed) | 1 | merged ca61b3c |
 | M2-FIX1b (R1-2 `-h`) | builder a62f6a1ec7ed2c6ee (resumed) | 2 | running |
+| M2-QFIX (qodo PR #3 x2) | builder a47810d72aee0e554 (resumed) | 2 | running |
 | M2-FIX2 (R1-3) | builder a47810d72aee0e554 (resumed) | 1 | merged 0babc80 |
 
 ### Parked questions
