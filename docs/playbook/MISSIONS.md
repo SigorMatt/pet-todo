@@ -6,11 +6,11 @@ lease_generation: 1
 phase: 1
 room: 1
 mission: none
-step: plan
+step: spec
 pr: none
 cursor: none
 counter: 0
-intent: post PLAN in room 1 after #6897608107
+intent: none
 waiting_for_owner: no
 status: running
 mission_started: none
