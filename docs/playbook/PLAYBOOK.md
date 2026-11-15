@@ -2,7 +2,7 @@
 
 pipeline: main
 repo: SigorMatt/pet-todo
-room: 0
+room: 1
 watchdog: none
 test: python3 -m unittest discover -s tests -t .
 
