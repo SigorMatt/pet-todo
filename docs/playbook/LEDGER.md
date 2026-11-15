@@ -5,3 +5,6 @@ Owned by the lead. Deferred findings, each with a target: a later mission in thi
 | ID | Source review | Finding | Reason | Target | Status |
 | --- | --- | --- | --- | --- | --- |
 | L-1 | cold M1 R1-6 | Concurrent `todo` runs can lose an item and reuse an ID: load, change and save take no lock. | Real, but locking is outside phase 1 scope (DESIGN has no concurrency requirement) and needs a design choice of lock mechanism. | phase 2 backlog | open |
+| L-2 | cold M1 R2-1 | `load` accepts a `next_id` not above every stored ID (or below 1), so a hand-edited file makes `add` reuse or hand out bad IDs. | Low, needs a corrupted file; M2 owns P1-2 "IDs are never reused" and touches ID handling. | M2 | open |
+| L-3 | cold M1 R2-2 | Text with undecodable argument bytes is stored as surrogates, and a later `list` crashes with `UnicodeEncodeError` on a strict stdout. | Low edge case; how to handle non-UTF-8 input is a behaviour choice DESIGN does not settle. | phase 2 backlog | open |
+| L-4 | cold M1 R2-3 | `add` accepts text with newlines, so `list` prints one item over several lines. | Low; reject versus escape is a user-visible choice DESIGN does not settle. | phase 2 backlog | open |
