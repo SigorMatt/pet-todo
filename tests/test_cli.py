@@ -164,6 +164,36 @@ class DueTest(CliTestCase):
                 with open(self.path, "rb") as f:
                     self.assertEqual(f.read(), before)
 
+    def test_dash_due_value_is_a_bad_date_not_a_usage_error(self):
+        self.run_cli("add", "keep")
+        with open(self.path, "rb") as f:
+            before = f.read()
+        for value in ("-2026-11-20", "-x", "--", "-h", "--help", "-1", "--due"):
+            for flag in ("--due", "--du", "--d"):
+                for argv in (["add", "x", flag, value], ["add", flag, value, "x"]):
+                    with self.subTest(argv=argv):
+                        self.assertEqual(
+                            self.run_cli(*argv),
+                            (1, "", "todo: bad date {}\n".format(value)))
+                        with open(self.path, "rb") as f:
+                            self.assertEqual(f.read(), before)
+
+    def test_dash_text_and_due_after_double_dash_still_work(self):
+        self.assertEqual(
+            self.run_cli("add", "--due", "2026-11-20", "--", "-text"),
+            (0, "added 1\n", ""))
+        self.assertEqual(self.run_cli("add", "--", "--due"), (0, "added 2\n", ""))
+        self.assertEqual(
+            self.run_cli("list"),
+            (0, "1 [ ] -text (due 2026-11-20)\n2 [ ] --due\n", ""))
+
+    def test_due_with_no_value_is_a_usage_error(self):
+        code, out, err = self.run_cli("add", "x", "--due")
+        self.assertEqual((code, out), (1, ""))
+        self.assertTrue(err.startswith("todo: "))
+        self.assertNotIn("bad date", err)
+        self.assertFalse(os.path.exists(self.path))
+
     def test_bad_date_on_missing_file_creates_nothing(self):
         self.assertEqual(
             self.run_cli("add", "x", "--due", "tomorrow"),

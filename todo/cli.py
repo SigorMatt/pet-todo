@@ -155,6 +155,34 @@ def _protect_id(argv):
     return argv
 
 
+# Spellings argparse accepts for add's --due (it allows unique prefixes).
+_DUE_FLAGS = ("--d", "--du", "--due")
+
+
+def _protect_due(argv):
+    """Glue the value after add's --due onto it, so ``--due -x`` means ``--due=-x``.
+
+    Argparse would read a dash-led value as an option and report a usage error;
+    glued, it reaches the date check and prints ``bad date``. Scanning stops at
+    ``--``, after which everything is text. A trailing --due is left alone.
+    """
+    if not argv or argv[0] != "add":
+        return argv
+    out = [argv[0]]
+    rest = argv[1:]
+    while rest:
+        token = rest.pop(0)
+        if token == "--":
+            out.append(token)
+            out.extend(rest)
+            break
+        if token in _DUE_FLAGS and rest:
+            out.append("--due=" + rest.pop(0))
+        else:
+            out.append(token)
+    return out
+
+
 def main(argv=None, today=None):
     """Run the todo command line; return the exit status.
 
@@ -166,7 +194,7 @@ def main(argv=None, today=None):
     if today is None:
         today = datetime.date.today()
     try:
-        args = _build_parser().parse_args(_protect_id(list(argv)))
+        args = _build_parser().parse_args(_protect_due(_protect_id(list(argv))))
     except UsageError as exc:
         print("todo: {}".format(exc), file=sys.stderr)
         return 1
