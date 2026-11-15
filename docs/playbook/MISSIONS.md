@@ -4,9 +4,9 @@
 lease_session: 635a4978
 lease_generation: 1
 phase: 1
-room: 0
+room: 1
 mission: none
-step: none
+step: plan
 pr: none
 cursor: none
 counter: 0
