@@ -33,6 +33,38 @@ class StoreTest(unittest.TestCase):
             store.load(self.path)
         self.assertEqual(cm.exception.path, self.path)
 
+    def test_wrong_shape_raises_store_error(self):
+        item = {"id": 1, "text": "x", "done": False}
+        bad = [
+            [],
+            {},
+            {"items": []},
+            {"next_id": 1},
+            {"next_id": "3", "items": []},
+            {"next_id": True, "items": []},
+            {"next_id": 1, "items": {}},
+            {"next_id": 2, "items": [1]},
+            {"next_id": 2, "items": [{"text": "x", "done": False}]},
+            {"next_id": 2, "items": [dict(item, id="1")]},
+            {"next_id": 2, "items": [dict(item, text=3)]},
+            {"next_id": 2, "items": [dict(item, done="no")]},
+            {"next_id": 2, "items": [{"id": 1, "text": "x"}]},
+        ]
+        for data in bad:
+            with self.subTest(data=data):
+                with open(self.path, "w") as f:
+                    json.dump(data, f)
+                with self.assertRaises(store.StoreError) as cm:
+                    store.load(self.path)
+                self.assertEqual(cm.exception.path, self.path)
+
+    def test_extra_keys_are_allowed(self):
+        data = {"next_id": 2, "items": [
+            {"id": 1, "text": "x", "done": True, "due": "2026-11-20"}]}
+        with open(self.path, "w") as f:
+            json.dump(data, f)
+        self.assertEqual(store.load(self.path), data)
+
     def test_save_round_trips(self):
         data = {"next_id": 2, "items": [{"id": 1, "text": "buy milk", "done": False}]}
         store.save(self.path, data)

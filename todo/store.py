@@ -27,9 +27,32 @@ def load(path):
         return {"next_id": 1, "items": []}
     except (OSError, ValueError) as exc:
         raise StoreError(path) from exc
-    if not isinstance(data, dict):
+    if not _valid(data):
         raise StoreError(path)
     return data
+
+
+def _is_int(value):
+    return isinstance(value, int) and not isinstance(value, bool)
+
+
+def _valid_item(item):
+    return (
+        isinstance(item, dict)
+        and _is_int(item.get("id"))
+        and isinstance(item.get("text"), str)
+        and isinstance(item.get("done"), bool)
+    )
+
+
+def _valid(data):
+    """True if data has the list's shape: an int next_id and a list of items."""
+    return (
+        isinstance(data, dict)
+        and _is_int(data.get("next_id"))
+        and isinstance(data.get("items"), list)
+        and all(_valid_item(item) for item in data["items"])
+    )
 
 
 def save(path, data):

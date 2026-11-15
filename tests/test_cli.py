@@ -91,6 +91,16 @@ class ErrorTest(CliTestCase):
         with open(self.path, encoding="utf-8") as f:
             self.assertEqual(f.read(), "not json{")
 
+    def test_wrong_shape_file(self):
+        for text in ("{}", '{"next_id": "3", "items": []}'):
+            for argv in (["list"], ["add", "x"]):
+                with self.subTest(text=text, argv=argv):
+                    self.write(text)
+                    self.assertEqual(
+                        self.run_cli(*argv),
+                        (1, "", "todo: cannot read {}\n".format(self.path)),
+                    )
+
     def test_usage_errors_exit_1_with_message(self):
         for argv in ([], ["frobnicate"], ["add"], ["list", "extra"]):
             with self.subTest(argv=argv):
