@@ -1,0 +1,5 @@
+| ID | severity | file | finding | disposition | evidence |
+| --- | --- | --- | --- | --- | --- |
+| R1-1 | low | todo/cli.py | `int(raw)` accepts whitespace, `+` and non-ASCII digits as IDs | fixed in 7ee3406 | `tests/test_cli.py` `test_id_must_be_plain_ascii_digits`: ` 1`, `+2`, `٣` print `todo: no item <id>`, exit 1, file unchanged; failed before the fix |
+| R1-2 | low | todo/cli.py | a dash-led non-number ID is parsed as an option | fixed in 1d2c1d3 | 15f34ba made a dash-led ID after `done`/`remove` an ID (`-x`); 1d2c1d3 extends that to `-h`/`--help`. `tests/test_cli.py` `test_dash_id_is_no_item_not_an_option` (`-x` → `todo: no item -x`, exit 1) and `test_help_flag_after_done_or_remove_is_an_id` (`done -h`, `remove --help` → `todo: no item <arg>`, exit 1); both failed before their fix |
+| R1-3 | low | todo/store.py (reported at todo/cli.py:66) | duplicate IDs in a hand-edited file let `remove` report success while one stays | fixed in 0babc80 | `tests/test_store.py` `test_duplicate_ids_raise_store_error` and `test_remove_with_duplicate_ids_reports_cannot_read` (the review's file: exit 1, `cannot read`, file unchanged); failed before the fix |
