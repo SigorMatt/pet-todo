@@ -6,7 +6,7 @@ lease_generation: 2
 phase: 1
 room: 1
 mission: M2
-step: build
+step: cold round 1
 pr: none
 cursor: 6897870993
 counter: 0
