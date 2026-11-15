@@ -6,7 +6,7 @@ lease_generation: 4
 phase: 1
 room: 1
 mission: M3
-step: gate
+step: close
 pr: merged:4
 cursor: 6898483510
 counter: 0
