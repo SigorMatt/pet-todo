@@ -5,15 +5,15 @@ lease_session: 5d8b80b8
 lease_generation: 3
 phase: 1
 room: 1
-mission: M2
-step: spec
-pr: merged:3
+mission: M3
+step: build
+pr: none
 cursor: 6898483510
 counter: 0
 intent: none
 waiting_for_owner: no
 status: running
-mission_started: 2026-11-15T17:07:29Z
+mission_started: 2026-11-15T18:19:07Z
 ```
 
 Owned by the lead. Only `room.py` edits the block above (`state set`, `state next`, `lease take`, `handoff`); edit the rest by hand and commit with `room.py state commit -m MSG`. `status` is running, paused, stopped or done; `mission_started` is the ISO-8601 UTC time the mission's spec was recorded.
