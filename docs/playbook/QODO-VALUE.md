@@ -9,3 +9,4 @@ Example: `PR #12 · same snapshot · first review: 7 findings, 4 already caught,
 ## Lines
 
 - PR #2 · same snapshot · first review: 5 findings, 4 already caught, 1 new (1 Remediation recommended), 1 dismissed · rounds: 0 new · 2 min
+- PR #3 · same snapshot · first review: 2 findings, 0 already caught, 2 new (2 Remediation recommended), 0 dismissed · rounds: 0 new · 2 min · draft
