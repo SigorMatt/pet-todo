@@ -54,7 +54,7 @@ Owned by the lead. Only `room.py` edits the block above (`state set`, `state nex
 | --- | --- | --- | --- |
 | M1-A | worktree-agent-a8a69e04a7a6ab938 | 1 | merged 4b3489d |
 | M1-B | worktree-agent-a4776bb98a0ea3690 | 1 | merged 9c4fe8a |
-| M1-F1 (fix R1-1..R1-5) | builder (foreground) | 1 | running |
+| M1-F1 (fix R1-1..R1-5) | worktree-agent-a7e28fbc235b08920 | 1 | merged dc80748 |
 
 ### Parked questions
 
