@@ -1,0 +1,71 @@
+{
+  "url": "https://api.github.com/repos/SigorMatt/pet-todo/pulls/comments/4579258251",
+  "pull_request_review_id": 5911767072,
+  "id": 4579258251,
+  "node_id": "PRRC_kwDOVuotTc8AAAABEPHviw",
+  "diff_hunk": "@@ -0,0 +1,106 @@\n+\"\"\"Load and save the to-do list; the only module that touches the file.\"\"\"\n+\n+import json\n+import os\n+import stat\n+import tempfile\n+\n+\n+class StoreError(Exception):\n+    \"\"\"The list file at ``path`` could not be read.\"\"\"\n+\n+    def __init__(self, path, message=None):\n+        self.path = path\n+        super().__init__(message or \"cannot read {}\".format(path))\n+\n+\n+def default_path():\n+    \"\"\"Return $TODO_FILE if set, else ./todo.json.\"\"\"\n+    return os.environ.get(\"TODO_FILE\") or \"todo.json\"\n+\n+\n+def load(path):\n+    \"\"\"Return the list stored at path; a missing file gives an empty list.\"\"\"\n+    try:\n+        with open(path, encoding=\"utf-8\") as f:\n+            data = json.load(f)\n+    except FileNotFoundError:\n+        return {\"next_id\": 1, \"items\": []}\n+    except (OSError, ValueError) as exc:\n+        raise StoreError(path) from exc\n+    if not _valid(data):\n+        raise StoreError(path)\n+    return data\n+\n+\n+def _is_int(value):\n+    return isinstance(value, int) and not isinstance(value, bool)\n+\n+\n+def _valid_item(item):\n+    return (\n+        isinstance(item, dict)\n+        and _is_int(item.get(\"id\"))\n+        and isinstance(item.get(\"text\"), str)\n+        and isinstance(item.get(\"done\"), bool)\n+    )\n+\n+\n+def _valid(data):\n+    \"\"\"True if data has the list's shape: an int next_id and a list of items.\"\"\"\n+    return (\n+        isinstance(data, dict)\n+        and _is_int(data.get(\"next_id\"))\n+        and isinstance(data.get(\"items\"), list)\n+        and all(_valid_item(item) for item in data[\"items\"])",
+  "path": "todo/store.py",
+  "commit_id": "05110a1f291bccb1e349968a5108546b9e1f4b2f",
+  "original_commit_id": "05110a1f291bccb1e349968a5108546b9e1f4b2f",
+  "user": {
+    "login": "qodo-code-review[bot]",
+    "id": 151058649,
+    "node_id": "BOT_kgDOCQD42Q",
+    "avatar_url": "https://avatars.githubusercontent.com/in/484649?v=4",
+    "gravatar_id": "",
+    "url": "https://api.github.com/users/qodo-code-review%5Bbot%5D",
+    "html_url": "https://github.com/apps/qodo-code-review",
+    "followers_url": "https://api.github.com/users/qodo-code-review%5Bbot%5D/followers",
+    "following_url": "https://api.github.com/users/qodo-code-review%5Bbot%5D/following{/other_user}",
+    "gists_url": "https://api.github.com/users/qodo-code-review%5Bbot%5D/gists{/gist_id}",
+    "starred_url": "https://api.github.com/users/qodo-code-review%5Bbot%5D/starred{/owner}{/repo}",
+    "subscriptions_url": "https://api.github.com/users/qodo-code-review%5Bbot%5D/subscriptions",
+    "organizations_url": "https://api.github.com/users/qodo-code-review%5Bbot%5D/orgs",
+    "repos_url": "https://api.github.com/users/qodo-code-review%5Bbot%5D/repos",
+    "events_url": "https://api.github.com/users/qodo-code-review%5Bbot%5D/events{/privacy}",
+    "received_events_url": "https://api.github.com/users/qodo-code-review%5Bbot%5D/received_events",
+    "type": "Bot",
+    "user_view_type": "public",
+    "site_admin": false
+  },
+  "body": "<img src=\"https://img.shields.io/badge/Medium-634FD1?style=flat-square\" height=\"20px\" alt=\"Remediation recommended\">\n\n2\\. Edited lists can reuse or reverse ids <code>🐞 Bug</code> <code>≡ Correctness</code>\n\n<pre>\n<b><i>_valid</i></b> accepts nonpositive IDs and a <b><i>next_id</i></b> that is no greater than an existing item&#x27;s ID. If a\nlist has been hand-edited or merged into that state, <b><i>_cmd_add</i></b> uses the inconsistent value\ndirectly, producing duplicate or negative IDs.\n</pre>\n\n\n<details>\n<summary><strong>Agent Prompt</strong></summary>\n\n```\n## Issue description\nAn accepted list can assign an already-used or negative ID to the next item.\n## Fix Focus Areas\n- todo/store.py[40-56]\n- todo/cli.py[38-42]\n## Recommended Fix\nRequire positive, unique item IDs and a positive next_id greater than every stored ID when loading the file. Report inconsistent state through StoreError rather than allocating an ambiguous ID.\n```\n\n<code>ⓘ Copy this prompt and use it to remediate the issue with your preferred AI generation tools</code>\n</details>\n\n[Dismiss ↗](https://app.qodo.ai/findings/5c9955ce-1135-429c-bf26-cf8a0218fe2d?action=dismiss&origin=git) | [View ↗](https://app.qodo.ai/findings/5c9955ce-1135-429c-bf26-cf8a0218fe2d)",
+  "created_at": "2026-11-15T16:42:33Z",
+  "updated_at": "2026-11-15T16:42:33Z",
+  "html_url": "https://github.com/SigorMatt/pet-todo/pull/2#discussion_r4579258251",
+  "pull_request_url": "https://api.github.com/repos/SigorMatt/pet-todo/pulls/2",
+  "_links": {
+    "self": {
+      "href": "https://api.github.com/repos/SigorMatt/pet-todo/pulls/comments/4579258251"
+    },
+    "html": {
+      "href": "https://github.com/SigorMatt/pet-todo/pull/2#discussion_r4579258251"
+    },
+    "pull_request": {
+      "href": "https://api.github.com/repos/SigorMatt/pet-todo/pulls/2"
+    }
+  },
+  "reactions": {
+    "url": "https://api.github.com/repos/SigorMatt/pet-todo/pulls/comments/4579258251/reactions",
+    "total_count": 0,
+    "+1": 0,
+    "-1": 0,
+    "laugh": 0,
+    "hooray": 0,
+    "confused": 0,
+    "heart": 0,
+    "rocket": 0,
+    "eyes": 0
+  },
+  "start_line": 53,
+  "original_start_line": 53,
+  "start_side": "RIGHT",
+  "line": 55,
+  "original_line": 55,
+  "side": "RIGHT",
+  "author_association": "NONE",
+  "original_position": 55,
+  "position": 55,
+  "subject_type": "line",
+  "is_copilot_code_review": false,
+  "copilot_code_review_sources": []
+}

@@ -1,0 +1,71 @@
+{
+  "url": "https://api.github.com/repos/SigorMatt/pet-todo/pulls/comments/4579258248",
+  "pull_request_review_id": 5911767072,
+  "id": 4579258248,
+  "node_id": "PRRC_kwDOVuotTc8AAAABEPHviA",
+  "diff_hunk": "@@ -0,0 +1,78 @@\n+\"\"\"Parse arguments, call the store and print results.\"\"\"\n+\n+import argparse\n+import sys\n+\n+from todo import store\n+\n+\n+class UsageError(Exception):\n+    \"\"\"A command line that could not be parsed.\"\"\"\n+\n+\n+class WriteError(Exception):\n+    \"\"\"The list file at ``path`` could not be written.\"\"\"\n+\n+    def __init__(self, path):\n+        self.path = path\n+        super().__init__(\"cannot write {}\".format(path))\n+\n+\n+class _Parser(argparse.ArgumentParser):\n+    def error(self, message):\n+        raise UsageError(message)\n+\n+\n+def _build_parser():\n+    parser = _Parser(prog=\"todo\", description=\"A small command-line to-do list.\")\n+    commands = parser.add_subparsers(dest=\"command\", metavar=\"command\")\n+    commands.required = True\n+\n+    add = commands.add_parser(\"add\", help=\"add an open item\")\n+    add.add_argument(\"text\", help=\"what to do\")\n+\n+    commands.add_parser(\"list\", help=\"list open items by ID\")\n+    return parser\n+\n+\n+def _cmd_add(args, path):\n+    data = store.load(path)\n+    item_id = data[\"next_id\"]\n+    data[\"items\"].append({\"id\": item_id, \"text\": args.text, \"done\": False})\n+    data[\"next_id\"] = item_id + 1",
+  "path": "todo/cli.py",
+  "commit_id": "05110a1f291bccb1e349968a5108546b9e1f4b2f",
+  "original_commit_id": "05110a1f291bccb1e349968a5108546b9e1f4b2f",
+  "user": {
+    "login": "qodo-code-review[bot]",
+    "id": 151058649,
+    "node_id": "BOT_kgDOCQD42Q",
+    "avatar_url": "https://avatars.githubusercontent.com/in/484649?v=4",
+    "gravatar_id": "",
+    "url": "https://api.github.com/users/qodo-code-review%5Bbot%5D",
+    "html_url": "https://github.com/apps/qodo-code-review",
+    "followers_url": "https://api.github.com/users/qodo-code-review%5Bbot%5D/followers",
+    "following_url": "https://api.github.com/users/qodo-code-review%5Bbot%5D/following{/other_user}",
+    "gists_url": "https://api.github.com/users/qodo-code-review%5Bbot%5D/gists{/gist_id}",
+    "starred_url": "https://api.github.com/users/qodo-code-review%5Bbot%5D/starred{/owner}{/repo}",
+    "subscriptions_url": "https://api.github.com/users/qodo-code-review%5Bbot%5D/subscriptions",
+    "organizations_url": "https://api.github.com/users/qodo-code-review%5Bbot%5D/orgs",
+    "repos_url": "https://api.github.com/users/qodo-code-review%5Bbot%5D/repos",
+    "events_url": "https://api.github.com/users/qodo-code-review%5Bbot%5D/events{/privacy}",
+    "received_events_url": "https://api.github.com/users/qodo-code-review%5Bbot%5D/received_events",
+    "type": "Bot",
+    "user_view_type": "public",
+    "site_admin": false
+  },
+  "body": "<img src=\"https://img.shields.io/badge/Medium-634FD1?style=flat-square\" height=\"20px\" alt=\"Remediation recommended\">\n\n1\\. Concurrent adds silently lose tasks <code>🐞 Bug</code> <code>≡ Correctness</code>\n\n<pre>\n<b><i>_cmd_add</i></b> loads, modifies and saves the list without coordinating with another process performing\nthe same sequence. When two commands read the same state before either saves, both announce the same\nID and the later replacement discards one item.\n</pre>\n\n\n<details>\n<summary><strong>Agent Prompt</strong></summary>\n\n```\n## Issue description\nConcurrent add commands can read the same next ID and overwrite one another's changes.\n## Fix Focus Areas\n- todo/cli.py[38-47]\n- todo/store.py[69-92]\n## Recommended Fix\nAcquire an inter-process lock associated with the list before loading it, and hold that lock through ID allocation and the completed save. Ensure both processes resolve to the same lock when TODO_FILE is a symlink.\n```\n\n<code>ⓘ Copy this prompt and use it to remediate the issue with your preferred AI generation tools</code>\n</details>\n\n[Dismiss ↗](https://app.qodo.ai/findings/36d1a7ae-0bf3-4411-ab61-02a7f67801de?action=dismiss&origin=git) | [View ↗](https://app.qodo.ai/findings/36d1a7ae-0bf3-4411-ab61-02a7f67801de)",
+  "created_at": "2026-11-15T16:42:33Z",
+  "updated_at": "2026-11-15T16:42:33Z",
+  "html_url": "https://github.com/SigorMatt/pet-todo/pull/2#discussion_r4579258248",
+  "pull_request_url": "https://api.github.com/repos/SigorMatt/pet-todo/pulls/2",
+  "_links": {
+    "self": {
+      "href": "https://api.github.com/repos/SigorMatt/pet-todo/pulls/comments/4579258248"
+    },
+    "html": {
+      "href": "https://github.com/SigorMatt/pet-todo/pull/2#discussion_r4579258248"
+    },
+    "pull_request": {
+      "href": "https://api.github.com/repos/SigorMatt/pet-todo/pulls/2"
+    }
+  },
+  "reactions": {
+    "url": "https://api.github.com/repos/SigorMatt/pet-todo/pulls/comments/4579258248/reactions",
+    "total_count": 0,
+    "+1": 0,
+    "-1": 0,
+    "laugh": 0,
+    "hooray": 0,
+    "confused": 0,
+    "heart": 0,
+    "rocket": 0,
+    "eyes": 0
+  },
+  "start_line": 39,
+  "original_start_line": 39,
+  "start_side": "RIGHT",
+  "line": 42,
+  "original_line": 42,
+  "side": "RIGHT",
+  "author_association": "NONE",
+  "original_position": 42,
+  "position": 42,
+  "subject_type": "line",
+  "is_copilot_code_review": false,
+  "copilot_code_review_sources": []
+}
