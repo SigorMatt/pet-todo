@@ -6,11 +6,11 @@ lease_generation: 3
 phase: 1
 room: 1
 mission: M3
-step: PR
-pr: none
+step: Qodo first review
+pr: 4
 cursor: 6898483510
 counter: 0
-intent: open PR mission/M3-due-overdue
+intent: none
 waiting_for_owner: no
 status: running
 mission_started: 2026-11-15T18:19:07Z
