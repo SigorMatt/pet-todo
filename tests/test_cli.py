@@ -1,6 +1,7 @@
 """Tests for todo.cli: add, list, done, remove and error handling."""
 
 import contextlib
+import datetime
 import io
 import json
 import os
@@ -24,10 +25,12 @@ class CliTestCase(unittest.TestCase):
         patcher.start()
         self.addCleanup(patcher.stop)
 
+    today = None
+
     def run_cli(self, *argv):
         out, err = io.StringIO(), io.StringIO()
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
-            code = cli.main(list(argv))
+            code = cli.main(list(argv), today=self.today)
         return code, out.getvalue(), err.getvalue()
 
     def write(self, text):
@@ -181,6 +184,89 @@ class DueTest(CliTestCase):
                         (1, "", "todo: cannot read {}\n".format(self.path)))
                     with open(self.path, "rb") as f:
                         self.assertEqual(f.read(), before)
+
+
+class OverdueTest(CliTestCase):
+    today = datetime.date(2026, 11, 15)
+
+    def write_items(self, items):
+        self.write(json.dumps({"next_id": 10, "items": items}))
+
+    def item(self, item_id, due=None, done=False):
+        item = {"id": item_id, "text": "t{}".format(item_id), "done": done}
+        if due is not None:
+            item["due"] = due
+        return item
+
+    def test_past_due_open_item_is_shown(self):
+        self.write_items([self.item(1, "2026-11-14")])
+        self.assertEqual(
+            self.run_cli("list", "--overdue"), (0, "1 [ ] t1 (due 2026-11-14)\n", ""))
+
+    def test_due_today_is_hidden(self):
+        self.write_items([self.item(1, "2026-11-15")])
+        self.assertEqual(self.run_cli("list", "--overdue"), (0, "", ""))
+
+    def test_future_due_is_hidden(self):
+        self.write_items([self.item(1, "2026-11-16"), self.item(2, "2027-01-01")])
+        self.assertEqual(self.run_cli("list", "--overdue"), (0, "", ""))
+
+    def test_no_due_is_hidden(self):
+        self.write_items([self.item(1)])
+        self.assertEqual(self.run_cli("list", "--overdue"), (0, "", ""))
+
+    def test_done_past_due_is_hidden(self):
+        self.write_items([self.item(1, "2026-11-01", done=True)])
+        self.assertEqual(self.run_cli("list", "--overdue"), (0, "", ""))
+
+    def mixed(self):
+        self.write_items([
+            self.item(5, "2025-12-31"),
+            self.item(2, "2026-11-15"),
+            self.item(4, "2026-11-01", done=True),
+            self.item(1, "2026-11-14"),
+            self.item(3),
+            self.item(6, "2026-12-01"),
+        ])
+
+    def test_overdue_lists_in_id_order(self):
+        self.mixed()
+        self.assertEqual(
+            self.run_cli("list", "--overdue"),
+            (0, "1 [ ] t1 (due 2026-11-14)\n5 [ ] t5 (due 2025-12-31)\n", ""))
+
+    def test_all_overdue_same_as_overdue(self):
+        self.mixed()
+        expected = self.run_cli("list", "--overdue")
+        for argv in (["list", "--all", "--overdue"], ["list", "--overdue", "--all"]):
+            with self.subTest(argv=argv):
+                self.assertEqual(self.run_cli(*argv), expected)
+
+    def test_empty_output_when_none_overdue(self):
+        for items in ([], [self.item(1, "2026-11-15"), self.item(2),
+                           self.item(3, "2026-01-01", done=True)]):
+            with self.subTest(items=items):
+                self.write_items(items)
+                self.assertEqual(self.run_cli("list", "--overdue"), (0, "", ""))
+        os.remove(self.path)
+        self.assertEqual(self.run_cli("list", "--overdue"), (0, "", ""))
+
+    def test_today_is_injected(self):
+        self.write_items([self.item(1, "2026-11-15")])
+        self.today = datetime.date(2026, 11, 16)
+        self.assertEqual(
+            self.run_cli("list", "--overdue"), (0, "1 [ ] t1 (due 2026-11-15)\n", ""))
+
+    def test_today_defaults_to_date_today(self):
+        self.write_items([self.item(1, "2026-11-15")])
+        fake = mock.Mock(wraps=datetime.date)
+        fake.today.return_value = datetime.date(2026, 11, 16)
+        fake.fromisoformat = datetime.date.fromisoformat
+        with mock.patch("todo.cli.datetime.date", fake):
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                code = cli.main(["list", "--overdue"])
+        self.assertEqual((code, out.getvalue()), (0, "1 [ ] t1 (due 2026-11-15)\n"))
 
 
 class DoneTest(CliTestCase):

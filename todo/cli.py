@@ -1,6 +1,7 @@
 """Parse arguments, call the store and print results."""
 
 import argparse
+import datetime
 import sys
 
 from todo import store
@@ -50,6 +51,8 @@ def _build_parser():
 
     lst = commands.add_parser("list", help="list open items by ID")
     lst.add_argument("--all", action="store_true", help="include done items")
+    lst.add_argument("--overdue", action="store_true",
+                     help="only open items due before today")
 
     done = commands.add_parser("done", help="mark an item done")
     done.add_argument("id", help="the item's ID")
@@ -96,10 +99,19 @@ def _cmd_add(args, path):
     print("added {}".format(item_id))
 
 
+def _is_overdue(item, today):
+    """True if item is open and its due date is before today."""
+    if item["done"] or "due" not in item:
+        return False
+    return datetime.date.fromisoformat(item["due"]) < today
+
+
 def _cmd_list(args, path):
     data = store.load(path)
     for item in sorted(data["items"], key=lambda i: i["id"]):
         if item["done"] and not args.all:
+            continue
+        if args.overdue and not _is_overdue(item, args.today):
             continue
         mark = "x" if item["done"] else " "
         due = " (due {})".format(item["due"]) if "due" in item else ""
@@ -143,15 +155,22 @@ def _protect_id(argv):
     return argv
 
 
-def main(argv=None):
-    """Run the todo command line; return the exit status."""
+def main(argv=None, today=None):
+    """Run the todo command line; return the exit status.
+
+    ``today`` (a ``datetime.date``) is the date ``list --overdue`` compares
+    against; it defaults to ``datetime.date.today()``.
+    """
     if argv is None:
         argv = sys.argv[1:]
+    if today is None:
+        today = datetime.date.today()
     try:
         args = _build_parser().parse_args(_protect_id(list(argv)))
     except UsageError as exc:
         print("todo: {}".format(exc), file=sys.stderr)
         return 1
+    args.today = today
     try:
         _COMMANDS[args.command](args, store.default_path())
     except store.StoreError as exc:
