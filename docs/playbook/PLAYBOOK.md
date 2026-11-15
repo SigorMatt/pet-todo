@@ -3,7 +3,7 @@
 pipeline: main
 repo: SigorMatt/pet-todo
 room: 1
-watchdog: none
+watchdog: trig_015BK2xs9kdQi1WbujNLmHR3
 test: python3 -m unittest discover -s tests -t .
 
 Owned by the architect; the lead reads it and acts on it. Every item has testable acceptance criteria that a cloud machine can check (4 CPUs, 16 GB, no GPU, internet only through the allowlist). Anything else is marked as a manual check for Matthew.
