@@ -1,3 +1,5 @@
+import contextlib
+import io
 import json
 import os
 import tempfile
@@ -64,6 +66,40 @@ class StoreTest(unittest.TestCase):
         with open(self.path, "w") as f:
             json.dump(data, f)
         self.assertEqual(store.load(self.path), data)
+
+    def _write(self, data):
+        with open(self.path, "w") as f:
+            json.dump(data, f)
+
+    def test_low_next_id_is_repaired_above_stored_ids(self):
+        items = [{"id": 3, "text": "x", "done": False},
+                 {"id": 1, "text": "y", "done": True}]
+        for next_id in (1, 3, 0, -5):
+            with self.subTest(next_id=next_id):
+                self._write({"next_id": next_id, "items": items})
+                self.assertEqual(store.load(self.path)["next_id"], 4)
+
+    def test_next_id_below_one_is_repaired_with_no_items(self):
+        for next_id in (0, -1):
+            with self.subTest(next_id=next_id):
+                self._write({"next_id": next_id, "items": []})
+                self.assertEqual(store.load(self.path)["next_id"], 1)
+
+    def test_higher_next_id_is_kept(self):
+        data = {"next_id": 9, "items": [{"id": 3, "text": "x", "done": False}]}
+        self._write(data)
+        self.assertEqual(store.load(self.path), data)
+
+    def test_add_after_hand_edited_next_id_gets_fresh_id(self):
+        from todo import cli
+        self._write({"next_id": 1, "items": [{"id": 3, "text": "x", "done": False}]})
+        out = io.StringIO()
+        with mock.patch.dict(os.environ, {"TODO_FILE": self.path}), \
+                contextlib.redirect_stdout(out):
+            self.assertEqual(cli.main(["add", "new"]), 0)
+        self.assertEqual(out.getvalue(), "added 4\n")
+        ids = [item["id"] for item in store.load(self.path)["items"]]
+        self.assertEqual(sorted(ids), [3, 4])
 
     def test_save_round_trips(self):
         data = {"next_id": 2, "items": [{"id": 1, "text": "buy milk", "done": False}]}

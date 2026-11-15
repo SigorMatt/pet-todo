@@ -30,7 +30,13 @@ def load(path):
         raise StoreError(path) from exc
     if not _valid(data):
         raise StoreError(path)
+    data["next_id"] = max(data["next_id"], _fresh_id(data["items"]))
     return data
+
+
+def _fresh_id(items):
+    """The lowest ID above every stored one, and at least 1."""
+    return max((item["id"] for item in items), default=0) + 1
 
 
 def _is_int(value):
