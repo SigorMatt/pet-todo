@@ -10,7 +10,7 @@ import tempfile
 import unittest
 from unittest import mock
 
-from todo import cli
+from todo import cli, store
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -47,6 +47,34 @@ class AddTest(CliTestCase):
     def test_second_add_prints_id_2(self):
         self.run_cli("add", "buy milk")
         self.assertEqual(self.run_cli("add", "walk dog"), (0, "added 2\n", ""))
+
+
+    def _write_top_id(self, top):
+        data = {"next_id": 1, "items": [{"id": top, "text": "a", "done": False}]}
+        self.write(json.dumps(data))
+
+    def test_add_up_to_max_id_saves_a_loadable_file(self):
+        self._write_top_id(store.MAX_ID - 1)
+        self.assertEqual(
+            self.run_cli("add", "b"), (0, "added {}\n".format(store.MAX_ID), ""))
+        data = store.load(self.path)
+        self.assertEqual(data["next_id"], store.MAX_ID + 1)
+        self.assertEqual([i["id"] for i in data["items"]],
+                         [store.MAX_ID - 1, store.MAX_ID])
+
+    def test_add_above_max_id_cannot_write_and_saves_nothing(self):
+        for next_id in (1, store.MAX_ID + 1):
+            with self.subTest(next_id=next_id):
+                self.write(json.dumps({"next_id": next_id, "items": [
+                    {"id": store.MAX_ID, "text": "a", "done": False}]}))
+                with open(self.path, "rb") as f:
+                    before = f.read()
+                self.assertEqual(
+                    self.run_cli("add", "b"),
+                    (1, "", "todo: cannot write {}\n".format(self.path)))
+                with open(self.path, "rb") as f:
+                    self.assertEqual(f.read(), before)
+                self.assertEqual(self.run_cli("list"), (0, "{} [ ] a\n".format(store.MAX_ID), ""))
 
 
 class ListTest(CliTestCase):

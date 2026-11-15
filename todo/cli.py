@@ -74,6 +74,8 @@ def _find(data, raw):
 def _cmd_add(args, path):
     data = store.load(path)
     item_id = data["next_id"]
+    if item_id > store.MAX_ID:
+        raise WriteError(path)
     data["items"].append({"id": item_id, "text": args.text, "done": False})
     data["next_id"] = item_id + 1
     _save(path, data)

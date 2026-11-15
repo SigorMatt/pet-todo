@@ -79,7 +79,7 @@ class StoreTest(unittest.TestCase):
         bad = [
             {"next_id": 1, "items": [dict(item, id=store.MAX_ID + 1)]},
             {"next_id": 1, "items": [item, dict(item, id=huge)]},
-            {"next_id": store.MAX_ID + 1, "items": []},
+            {"next_id": store.MAX_ID + 2, "items": []},
             {"next_id": huge, "items": []},
         ]
         for data in bad:
@@ -88,6 +88,12 @@ class StoreTest(unittest.TestCase):
                 with self.assertRaises(store.StoreError) as cm:
                     store.load(self.path)
                 self.assertEqual(cm.exception.path, self.path)
+
+    def test_next_id_up_to_max_plus_one_is_allowed(self):
+        data = {"next_id": store.MAX_ID + 1, "items": [
+            {"id": store.MAX_ID, "text": "a", "done": False}]}
+        self._write(data)
+        self.assertEqual(store.load(self.path), data)
 
     def test_ids_up_to_max_are_allowed(self):
         self._write({"next_id": 1, "items": [

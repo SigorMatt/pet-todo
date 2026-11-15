@@ -6,9 +6,9 @@ import stat
 import tempfile
 
 
-# The largest stored ID or next_id a valid file may hold: the signed 64-bit
-# maximum. It keeps every ID, and the next_id derived from it, far below
-# json's integer-to-string limit, so a loaded list can always be saved.
+# The largest item ID a valid file may hold (next_id may be one more): the
+# signed 64-bit maximum. It keeps every ID far below json's integer-to-string
+# limit, so a loaded list can always be saved; add refuses to go past it.
 MAX_ID = 2**63 - 1
 
 
@@ -49,14 +49,9 @@ def _is_int(value):
     return isinstance(value, int) and not isinstance(value, bool)
 
 
-def _is_id(value):
-    """True for an int no larger than MAX_ID."""
-    return _is_int(value) and value <= MAX_ID
-
-
 def _is_item_id(value):
     """True for an int from 1 to MAX_ID: an ID done and remove can reach."""
-    return _is_id(value) and value >= 1
+    return _is_int(value) and 1 <= value <= MAX_ID
 
 
 def _valid_item(item):
@@ -72,7 +67,8 @@ def _valid(data):
     """True if data has the list's shape: an int next_id and items with unique IDs."""
     return (
         isinstance(data, dict)
-        and _is_id(data.get("next_id"))
+        and _is_int(data.get("next_id"))
+        and data["next_id"] <= MAX_ID + 1
         and isinstance(data.get("items"), list)
         and all(_valid_item(item) for item in data["items"])
         and _unique_ids(data["items"])
