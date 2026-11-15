@@ -101,6 +101,32 @@ class ErrorTest(CliTestCase):
                         (1, "", "todo: cannot read {}\n".format(self.path)),
                     )
 
+    def test_add_into_missing_directory_cannot_write(self):
+        path = os.path.join(os.path.dirname(self.path), "no", "such", "t.json")
+        with mock.patch.dict(os.environ, {"TODO_FILE": path}):
+            self.assertEqual(
+                self.run_cli("add", "x"),
+                (1, "", "todo: cannot write {}\n".format(path)),
+            )
+
+    def test_any_oserror_on_save_cannot_write(self):
+        for exc in (PermissionError("ro"), OSError(28, "No space left on device")):
+            with self.subTest(exc=exc):
+                with mock.patch("todo.store.os.replace", side_effect=exc):
+                    self.assertEqual(
+                        self.run_cli("add", "x"),
+                        (1, "", "todo: cannot write {}\n".format(self.path)),
+                    )
+
+    def test_oserror_on_read_cannot_read(self):
+        os.mkdir(self.path)
+        for argv in (["list"], ["add", "x"]):
+            with self.subTest(argv=argv):
+                self.assertEqual(
+                    self.run_cli(*argv),
+                    (1, "", "todo: cannot read {}\n".format(self.path)),
+                )
+
     def test_usage_errors_exit_1_with_message(self):
         for argv in ([], ["frobnicate"], ["add"], ["list", "extra"]):
             with self.subTest(argv=argv):
@@ -134,6 +160,16 @@ class SubprocessTest(CliTestCase):
         r = self.run_module("list")
         self.assertEqual(r.returncode, 1)
         self.assertEqual(r.stderr, "todo: cannot read {}\n".format(self.path))
+
+    def test_cannot_write(self):
+        path = os.path.join(os.path.dirname(self.path), "no", "such", "t.json")
+        r = subprocess.run(
+            [sys.executable, "-m", "todo", "add", "x"],
+            cwd=ROOT, env=dict(os.environ, TODO_FILE=path),
+            capture_output=True, text=True, timeout=30,
+        )
+        self.assertEqual((r.returncode, r.stdout), (1, ""))
+        self.assertEqual(r.stderr, "todo: cannot write {}\n".format(path))
 
 
 if __name__ == "__main__":

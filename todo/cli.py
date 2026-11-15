@@ -10,6 +10,14 @@ class UsageError(Exception):
     """A command line that could not be parsed."""
 
 
+class WriteError(Exception):
+    """The list file at ``path`` could not be written."""
+
+    def __init__(self, path):
+        self.path = path
+        super().__init__("cannot write {}".format(path))
+
+
 class _Parser(argparse.ArgumentParser):
     def error(self, message):
         raise UsageError(message)
@@ -32,7 +40,10 @@ def _cmd_add(args, path):
     item_id = data["next_id"]
     data["items"].append({"id": item_id, "text": args.text, "done": False})
     data["next_id"] = item_id + 1
-    store.save(path, data)
+    try:
+        store.save(path, data)
+    except OSError as exc:
+        raise WriteError(path) from exc
     print("added {}".format(item_id))
 
 
@@ -60,5 +71,8 @@ def main(argv=None):
         _COMMANDS[args.command](args, store.default_path())
     except store.StoreError as exc:
         print("todo: cannot read {}".format(exc.path), file=sys.stderr)
+        return 1
+    except WriteError as exc:
+        print("todo: {}".format(exc), file=sys.stderr)
         return 1
     return 0
