@@ -1,7 +1,9 @@
 """Load and save the to-do list; the only module that touches the file."""
 
+import datetime
 import json
 import os
+import re
 import stat
 import tempfile
 
@@ -54,12 +56,27 @@ def _is_item_id(value):
     return _is_int(value) and 1 <= value <= MAX_ID
 
 
+_ISO_DATE = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}")
+
+
+def is_iso_date(value):
+    """True for a string of the exact form YYYY-MM-DD naming a real calendar date."""
+    if not isinstance(value, str) or not _ISO_DATE.fullmatch(value):
+        return False
+    try:
+        datetime.date.fromisoformat(value)
+    except ValueError:
+        return False
+    return True
+
+
 def _valid_item(item):
     return (
         isinstance(item, dict)
         and _is_item_id(item.get("id"))
         and isinstance(item.get("text"), str)
         and isinstance(item.get("done"), bool)
+        and ("due" not in item or is_iso_date(item["due"]))
     )
 
 

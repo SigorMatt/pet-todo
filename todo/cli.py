@@ -1,6 +1,8 @@
 """Parse arguments, call the store and print results."""
+# Drill (M6 rehearsal): an owner change pushed after the review; the gate must refuse it until it is reviewed.
 
 import argparse
+import datetime
 import sys
 
 from todo import store
@@ -26,6 +28,14 @@ class NoItemError(Exception):
         super().__init__("no item {}".format(raw))
 
 
+class BadDateError(Exception):
+    """``raw`` is not a real date in the form YYYY-MM-DD."""
+
+    def __init__(self, raw):
+        self.raw = raw
+        super().__init__("bad date {}".format(raw))
+
+
 class _Parser(argparse.ArgumentParser):
     def error(self, message):
         raise UsageError(message)
@@ -38,9 +48,12 @@ def _build_parser():
 
     add = commands.add_parser("add", help="add an open item")
     add.add_argument("text", help="what to do")
+    add.add_argument("--due", metavar="YYYY-MM-DD", help="the item's due date")
 
     lst = commands.add_parser("list", help="list open items by ID")
     lst.add_argument("--all", action="store_true", help="include done items")
+    lst.add_argument("--overdue", action="store_true",
+                     help="only open items due before today")
 
     done = commands.add_parser("done", help="mark an item done")
     done.add_argument("id", help="the item's ID")
@@ -72,14 +85,26 @@ def _find(data, raw):
 
 
 def _cmd_add(args, path):
+    if args.due is not None and not store.is_iso_date(args.due):
+        raise BadDateError(args.due)
     data = store.load(path)
     item_id = data["next_id"]
     if item_id > store.MAX_ID:
         raise WriteError(path)
-    data["items"].append({"id": item_id, "text": args.text, "done": False})
+    item = {"id": item_id, "text": args.text, "done": False}
+    if args.due is not None:
+        item["due"] = args.due
+    data["items"].append(item)
     data["next_id"] = item_id + 1
     _save(path, data)
     print("added {}".format(item_id))
+
+
+def _is_overdue(item, today):
+    """True if item is open and its due date is before today."""
+    if item["done"] or "due" not in item:
+        return False
+    return datetime.date.fromisoformat(item["due"]) < today
 
 
 def _cmd_list(args, path):
@@ -87,8 +112,11 @@ def _cmd_list(args, path):
     for item in sorted(data["items"], key=lambda i: i["id"]):
         if item["done"] and not args.all:
             continue
+        if args.overdue and not _is_overdue(item, args.today):
+            continue
         mark = "x" if item["done"] else " "
-        print("{} [{}] {}".format(item["id"], mark, item["text"]))
+        due = " (due {})".format(item["due"]) if "due" in item else ""
+        print("{} [{}] {}{}".format(item["id"], mark, item["text"], due))
 
 
 def _cmd_done(args, path):
@@ -128,21 +156,56 @@ def _protect_id(argv):
     return argv
 
 
-def main(argv=None):
-    """Run the todo command line; return the exit status."""
+# Spellings argparse accepts for add's --due (it allows unique prefixes).
+_DUE_FLAGS = ("--d", "--du", "--due")
+
+
+def _protect_due(argv):
+    """Glue the value after add's --due onto it, so ``--due -x`` means ``--due=-x``.
+
+    Argparse would read a dash-led value as an option and report a usage error;
+    glued, it reaches the date check and prints ``bad date``. Scanning stops at
+    ``--``, after which everything is text. A trailing --due is left alone.
+    """
+    if not argv or argv[0] != "add":
+        return argv
+    out = [argv[0]]
+    rest = argv[1:]
+    while rest:
+        token = rest.pop(0)
+        if token == "--":
+            out.append(token)
+            out.extend(rest)
+            break
+        if token in _DUE_FLAGS and rest:
+            out.append("--due=" + rest.pop(0))
+        else:
+            out.append(token)
+    return out
+
+
+def main(argv=None, today=None):
+    """Run the todo command line; return the exit status.
+
+    ``today`` (a ``datetime.date``) is the date ``list --overdue`` compares
+    against; it defaults to ``datetime.date.today()``.
+    """
     if argv is None:
         argv = sys.argv[1:]
+    if today is None:
+        today = datetime.date.today()
     try:
-        args = _build_parser().parse_args(_protect_id(list(argv)))
+        args = _build_parser().parse_args(_protect_due(_protect_id(list(argv))))
     except UsageError as exc:
         print("todo: {}".format(exc), file=sys.stderr)
         return 1
+    args.today = today
     try:
         _COMMANDS[args.command](args, store.default_path())
     except store.StoreError as exc:
         print("todo: cannot read {}".format(exc.path), file=sys.stderr)
         return 1
-    except (WriteError, NoItemError) as exc:
+    except (WriteError, NoItemError, BadDateError) as exc:
         print("todo: {}".format(exc), file=sys.stderr)
         return 1
     return 0

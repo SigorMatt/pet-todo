@@ -1,6 +1,7 @@
 """Tests for todo.cli: add, list, done, remove and error handling."""
 
 import contextlib
+import datetime
 import io
 import json
 import os
@@ -24,10 +25,12 @@ class CliTestCase(unittest.TestCase):
         patcher.start()
         self.addCleanup(patcher.stop)
 
+    today = None
+
     def run_cli(self, *argv):
         out, err = io.StringIO(), io.StringIO()
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
-            code = cli.main(list(argv))
+            code = cli.main(list(argv), today=self.today)
         return code, out.getvalue(), err.getvalue()
 
     def write(self, text):
@@ -101,6 +104,199 @@ class ListTest(CliTestCase):
     def test_empty_list_prints_nothing(self):
         self.write(json.dumps({"next_id": 1, "items": []}))
         self.assertEqual(self.run_cli("list"), (0, "", ""))
+
+
+class DueTest(CliTestCase):
+    def read_json(self):
+        with open(self.path, encoding="utf-8") as f:
+            return json.load(f)
+
+    def test_add_with_due_stores_date_and_list_shows_it(self):
+        self.assertEqual(
+            self.run_cli("add", "buy milk", "--due", "2026-11-20"), (0, "added 1\n", ""))
+        self.assertEqual(self.read_json()["items"], [
+            {"id": 1, "text": "buy milk", "done": False, "due": "2026-11-20"}])
+        self.assertEqual(
+            self.run_cli("list"), (0, "1 [ ] buy milk (due 2026-11-20)\n", ""))
+
+    def test_due_before_text_also_works(self):
+        self.assertEqual(
+            self.run_cli("add", "--due", "2024-02-29", "leap"), (0, "added 1\n", ""))
+        self.assertEqual(self.read_json()["items"][0]["due"], "2024-02-29")
+
+    def test_items_without_due_show_no_suffix(self):
+        self.run_cli("add", "buy milk")
+        self.run_cli("add", "walk dog", "--due", "2026-12-01")
+        self.assertNotIn("due", self.read_json()["items"][0])
+        self.assertEqual(
+            self.run_cli("list"),
+            (0, "1 [ ] buy milk\n2 [ ] walk dog (due 2026-12-01)\n", ""))
+
+    def test_list_all_shows_due_on_done_items(self):
+        self.run_cli("add", "buy milk", "--due", "2026-11-20")
+        self.run_cli("add", "walk dog")
+        self.run_cli("done", "1")
+        self.assertEqual(self.run_cli("list"), (0, "2 [ ] walk dog\n", ""))
+        self.assertEqual(
+            self.run_cli("list", "--all"),
+            (0, "1 [x] buy milk (due 2026-11-20)\n2 [ ] walk dog\n", ""))
+
+    def test_due_survives_done_and_remove_saves(self):
+        self.run_cli("add", "a", "--due", "2026-11-20")
+        self.run_cli("add", "b")
+        self.run_cli("done", "1")
+        self.run_cli("remove", "2")
+        self.assertEqual(self.read_json()["items"], [
+            {"id": 1, "text": "a", "done": True, "due": "2026-11-20"}])
+
+    def test_bad_date_exits_1_and_leaves_file_unchanged(self):
+        self.run_cli("add", "keep", "--due", "2026-11-20")
+        with open(self.path, "rb") as f:
+            before = f.read()
+        bad = ("2026-13-01", "2026-02-30", "tomorrow", "2026-1-5", "",
+               "20261120", "2026-11-20T00:00", " 2026-11-20", "2026-11-20\n",
+               "\uff12\uff10\uff12\uff16-11-20", "2025-02-29", "2026-00-10")
+        for value in bad:
+            with self.subTest(value=value):
+                self.assertEqual(
+                    self.run_cli("add", "x", "--due", value),
+                    (1, "", "todo: bad date {}\n".format(value)))
+                with open(self.path, "rb") as f:
+                    self.assertEqual(f.read(), before)
+
+    def test_dash_due_value_is_a_bad_date_not_a_usage_error(self):
+        self.run_cli("add", "keep")
+        with open(self.path, "rb") as f:
+            before = f.read()
+        for value in ("-2026-11-20", "-x", "--", "-h", "--help", "-1", "--due"):
+            for flag in ("--due", "--du", "--d"):
+                for argv in (["add", "x", flag, value], ["add", flag, value, "x"]):
+                    with self.subTest(argv=argv):
+                        self.assertEqual(
+                            self.run_cli(*argv),
+                            (1, "", "todo: bad date {}\n".format(value)))
+                        with open(self.path, "rb") as f:
+                            self.assertEqual(f.read(), before)
+
+    def test_dash_text_and_due_after_double_dash_still_work(self):
+        self.assertEqual(
+            self.run_cli("add", "--due", "2026-11-20", "--", "-text"),
+            (0, "added 1\n", ""))
+        self.assertEqual(self.run_cli("add", "--", "--due"), (0, "added 2\n", ""))
+        self.assertEqual(
+            self.run_cli("list"),
+            (0, "1 [ ] -text (due 2026-11-20)\n2 [ ] --due\n", ""))
+
+    def test_due_with_no_value_is_a_usage_error(self):
+        code, out, err = self.run_cli("add", "x", "--due")
+        self.assertEqual((code, out), (1, ""))
+        self.assertTrue(err.startswith("todo: "))
+        self.assertNotIn("bad date", err)
+        self.assertFalse(os.path.exists(self.path))
+
+    def test_bad_date_on_missing_file_creates_nothing(self):
+        self.assertEqual(
+            self.run_cli("add", "x", "--due", "tomorrow"),
+            (1, "", "todo: bad date tomorrow\n"))
+        self.assertFalse(os.path.exists(self.path))
+
+    def test_stored_bad_due_cannot_read(self):
+        item = {"id": 1, "text": "a", "done": False}
+        for due in (20261120, None, True, ["2026-11-20"], "2026-13-01",
+                    "2026-02-30", "tomorrow", "2026-1-5", "20261120"):
+            for argv in (["list"], ["list", "--all"], ["add", "b"], ["done", "1"]):
+                with self.subTest(due=due, argv=argv):
+                    self.write(json.dumps({"next_id": 2, "items": [dict(item, due=due)]}))
+                    with open(self.path, "rb") as f:
+                        before = f.read()
+                    self.assertEqual(
+                        self.run_cli(*argv),
+                        (1, "", "todo: cannot read {}\n".format(self.path)))
+                    with open(self.path, "rb") as f:
+                        self.assertEqual(f.read(), before)
+
+
+class OverdueTest(CliTestCase):
+    today = datetime.date(2026, 11, 15)
+
+    def write_items(self, items):
+        self.write(json.dumps({"next_id": 10, "items": items}))
+
+    def item(self, item_id, due=None, done=False):
+        item = {"id": item_id, "text": "t{}".format(item_id), "done": done}
+        if due is not None:
+            item["due"] = due
+        return item
+
+    def test_past_due_open_item_is_shown(self):
+        self.write_items([self.item(1, "2026-11-14")])
+        self.assertEqual(
+            self.run_cli("list", "--overdue"), (0, "1 [ ] t1 (due 2026-11-14)\n", ""))
+
+    def test_due_today_is_hidden(self):
+        self.write_items([self.item(1, "2026-11-15")])
+        self.assertEqual(self.run_cli("list", "--overdue"), (0, "", ""))
+
+    def test_future_due_is_hidden(self):
+        self.write_items([self.item(1, "2026-11-16"), self.item(2, "2027-01-01")])
+        self.assertEqual(self.run_cli("list", "--overdue"), (0, "", ""))
+
+    def test_no_due_is_hidden(self):
+        self.write_items([self.item(1)])
+        self.assertEqual(self.run_cli("list", "--overdue"), (0, "", ""))
+
+    def test_done_past_due_is_hidden(self):
+        self.write_items([self.item(1, "2026-11-01", done=True)])
+        self.assertEqual(self.run_cli("list", "--overdue"), (0, "", ""))
+
+    def mixed(self):
+        self.write_items([
+            self.item(5, "2025-12-31"),
+            self.item(2, "2026-11-15"),
+            self.item(4, "2026-11-01", done=True),
+            self.item(1, "2026-11-14"),
+            self.item(3),
+            self.item(6, "2026-12-01"),
+        ])
+
+    def test_overdue_lists_in_id_order(self):
+        self.mixed()
+        self.assertEqual(
+            self.run_cli("list", "--overdue"),
+            (0, "1 [ ] t1 (due 2026-11-14)\n5 [ ] t5 (due 2025-12-31)\n", ""))
+
+    def test_all_overdue_same_as_overdue(self):
+        self.mixed()
+        expected = self.run_cli("list", "--overdue")
+        for argv in (["list", "--all", "--overdue"], ["list", "--overdue", "--all"]):
+            with self.subTest(argv=argv):
+                self.assertEqual(self.run_cli(*argv), expected)
+
+    def test_empty_output_when_none_overdue(self):
+        for items in ([], [self.item(1, "2026-11-15"), self.item(2),
+                           self.item(3, "2026-01-01", done=True)]):
+            with self.subTest(items=items):
+                self.write_items(items)
+                self.assertEqual(self.run_cli("list", "--overdue"), (0, "", ""))
+        os.remove(self.path)
+        self.assertEqual(self.run_cli("list", "--overdue"), (0, "", ""))
+
+    def test_today_is_injected(self):
+        self.write_items([self.item(1, "2026-11-15")])
+        self.today = datetime.date(2026, 11, 16)
+        self.assertEqual(
+            self.run_cli("list", "--overdue"), (0, "1 [ ] t1 (due 2026-11-15)\n", ""))
+
+    def test_today_defaults_to_date_today(self):
+        self.write_items([self.item(1, "2026-11-15")])
+        fake = mock.Mock(wraps=datetime.date)
+        fake.today.return_value = datetime.date(2026, 11, 16)
+        fake.fromisoformat = datetime.date.fromisoformat
+        with mock.patch("todo.cli.datetime.date", fake):
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                code = cli.main(["list", "--overdue"])
+        self.assertEqual((code, out.getvalue()), (0, "1 [ ] t1 (due 2026-11-15)\n"))
 
 
 class DoneTest(CliTestCase):

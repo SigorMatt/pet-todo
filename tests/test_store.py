@@ -146,6 +146,39 @@ class StoreTest(unittest.TestCase):
         with open(self.path, "w") as f:
             json.dump(data, f)
 
+    def test_valid_due_is_loaded_and_kept_on_save(self):
+        data = {"next_id": 3, "items": [
+            {"id": 1, "text": "x", "done": False, "due": "2024-02-29"},
+            {"id": 2, "text": "y", "done": True}]}
+        self._write(data)
+        loaded = store.load(self.path)
+        self.assertEqual(loaded, data)
+        store.save(self.path, loaded)
+        self.assertEqual(store.load(self.path), data)
+        with open(self.path) as f:
+            self.assertEqual(json.load(f), data)
+
+    def test_non_string_or_non_iso_due_raises_store_error(self):
+        item = {"id": 1, "text": "x", "done": False}
+        for due in (20261120, 2026.1, None, False, ["2026-11-20"], {"d": 1},
+                    "", "2026-13-01", "2026-02-30", "2025-02-29", "tomorrow",
+                    "2026-1-5", "20261120", "2026-11-20T10:00", "2026-11-20 ",
+                    "2026-W47-1"):
+            with self.subTest(due=due):
+                self._write({"next_id": 2, "items": [dict(item, due=due)]})
+                with self.assertRaises(store.StoreError) as cm:
+                    store.load(self.path)
+                self.assertEqual(cm.exception.path, self.path)
+
+    def test_is_iso_date(self):
+        for value in ("2026-11-20", "2024-02-29", "0001-01-01", "9999-12-31"):
+            with self.subTest(value=value):
+                self.assertTrue(store.is_iso_date(value))
+        for value in ("2026-13-01", "2026-02-30", "tomorrow", "2026-1-5",
+                      "0000-01-01", "2026-11-20\n", "\u0662026-11-20", 20261120):
+            with self.subTest(value=value):
+                self.assertFalse(store.is_iso_date(value))
+
     def test_low_next_id_is_repaired_above_stored_ids(self):
         items = [{"id": 3, "text": "x", "done": False},
                  {"id": 1, "text": "y", "done": True}]
