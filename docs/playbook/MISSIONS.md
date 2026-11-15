@@ -10,7 +10,7 @@ step: PR
 pr: none
 cursor: 6897870993
 counter: 0
-intent: none
+intent: open PR mission/M2-done-remove
 waiting_for_owner: no
 status: running
 mission_started: 2026-11-15T17:07:29Z
