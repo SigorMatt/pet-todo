@@ -1,3 +1,5 @@
+import contextlib
+import io
 import json
 import os
 import tempfile
@@ -58,12 +60,136 @@ class StoreTest(unittest.TestCase):
                     store.load(self.path)
                 self.assertEqual(cm.exception.path, self.path)
 
+    def test_duplicate_ids_raise_store_error(self):
+        item = {"id": 1, "text": "a", "done": False}
+        bad = [
+            {"next_id": 1, "items": [item, dict(item, text="b")]},
+            {"next_id": 5, "items": [item, dict(item, id=2), dict(item, done=True)]},
+        ]
+        for data in bad:
+            with self.subTest(data=data):
+                self._write(data)
+                with self.assertRaises(store.StoreError) as cm:
+                    store.load(self.path)
+                self.assertEqual(cm.exception.path, self.path)
+
+    def test_ids_above_max_raise_store_error(self):
+        item = {"id": 1, "text": "a", "done": False}
+        huge = int("9" * 4300)
+        bad = [
+            {"next_id": 1, "items": [dict(item, id=store.MAX_ID + 1)]},
+            {"next_id": 1, "items": [item, dict(item, id=huge)]},
+            {"next_id": store.MAX_ID + 2, "items": []},
+            {"next_id": huge, "items": []},
+        ]
+        for data in bad:
+            with self.subTest(next_id=data["next_id"] > store.MAX_ID):
+                self._write(data)
+                with self.assertRaises(store.StoreError) as cm:
+                    store.load(self.path)
+                self.assertEqual(cm.exception.path, self.path)
+
+    def test_next_id_up_to_max_plus_one_is_allowed(self):
+        data = {"next_id": store.MAX_ID + 1, "items": [
+            {"id": store.MAX_ID, "text": "a", "done": False}]}
+        self._write(data)
+        self.assertEqual(store.load(self.path), data)
+
+    def test_ids_up_to_max_are_allowed(self):
+        self._write({"next_id": 1, "items": [
+            {"id": store.MAX_ID, "text": "a", "done": False}]})
+        self.assertEqual(store.load(self.path)["next_id"], store.MAX_ID + 1)
+
+    def test_add_and_done_with_huge_stored_id_report_cannot_read(self):
+        from todo import cli
+        data = {"next_id": 1, "items": [
+            {"id": 1, "text": "a", "done": False},
+            {"id": int("9" * 4300), "text": "b", "done": False}]}
+        self._write(data)
+        with open(self.path, "rb") as f:
+            before = f.read()
+        for argv in (["add", "c"], ["done", "1"]):
+            with self.subTest(argv=argv):
+                out, err = io.StringIO(), io.StringIO()
+                with mock.patch.dict(os.environ, {"TODO_FILE": self.path}), \
+                        contextlib.redirect_stdout(out), \
+                        contextlib.redirect_stderr(err):
+                    self.assertEqual(cli.main(argv), 1)
+                self.assertEqual(out.getvalue(), "")
+                self.assertEqual(
+                    err.getvalue(), "todo: cannot read {}\n".format(self.path))
+                with open(self.path, "rb") as f:
+                    self.assertEqual(f.read(), before)
+
+    def test_remove_with_duplicate_ids_reports_cannot_read(self):
+        from todo import cli
+        data = {"next_id": 1, "items": [{"id": 1, "text": "a", "done": False},
+                                        {"id": 1, "text": "b", "done": False}]}
+        self._write(data)
+        out, err = io.StringIO(), io.StringIO()
+        with mock.patch.dict(os.environ, {"TODO_FILE": self.path}), \
+                contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            self.assertEqual(cli.main(["remove", "1"]), 1)
+        self.assertEqual(out.getvalue(), "")
+        self.assertEqual(err.getvalue(), "todo: cannot read {}\n".format(self.path))
+        with open(self.path) as f:
+            self.assertEqual(json.load(f), data)
+
     def test_extra_keys_are_allowed(self):
         data = {"next_id": 2, "items": [
             {"id": 1, "text": "x", "done": True, "due": "2026-11-20"}]}
         with open(self.path, "w") as f:
             json.dump(data, f)
         self.assertEqual(store.load(self.path), data)
+
+    def _write(self, data):
+        with open(self.path, "w") as f:
+            json.dump(data, f)
+
+    def test_low_next_id_is_repaired_above_stored_ids(self):
+        items = [{"id": 3, "text": "x", "done": False},
+                 {"id": 1, "text": "y", "done": True}]
+        for next_id in (1, 3, 0, -5):
+            with self.subTest(next_id=next_id):
+                self._write({"next_id": next_id, "items": items})
+                self.assertEqual(store.load(self.path)["next_id"], 4)
+
+    def test_next_id_below_one_is_repaired_with_no_items(self):
+        for next_id in (0, -1):
+            with self.subTest(next_id=next_id):
+                self._write({"next_id": next_id, "items": []})
+                self.assertEqual(store.load(self.path)["next_id"], 1)
+
+    def test_item_ids_below_one_raise_store_error(self):
+        item = {"id": 2, "text": "a", "done": False}
+        for bad_id in (0, -1, -3):
+            for next_id in (-4, 0, 1, 5):
+                with self.subTest(id=bad_id, next_id=next_id):
+                    self._write({"next_id": next_id,
+                                 "items": [item, dict(item, id=bad_id)]})
+                    with self.assertRaises(store.StoreError) as cm:
+                        store.load(self.path)
+                    self.assertEqual(cm.exception.path, self.path)
+
+    def test_item_id_one_is_allowed(self):
+        self._write({"next_id": 0, "items": [{"id": 1, "text": "a", "done": False}]})
+        self.assertEqual(store.load(self.path)["next_id"], 2)
+
+    def test_higher_next_id_is_kept(self):
+        data = {"next_id": 9, "items": [{"id": 3, "text": "x", "done": False}]}
+        self._write(data)
+        self.assertEqual(store.load(self.path), data)
+
+    def test_add_after_hand_edited_next_id_gets_fresh_id(self):
+        from todo import cli
+        self._write({"next_id": 1, "items": [{"id": 3, "text": "x", "done": False}]})
+        out = io.StringIO()
+        with mock.patch.dict(os.environ, {"TODO_FILE": self.path}), \
+                contextlib.redirect_stdout(out):
+            self.assertEqual(cli.main(["add", "new"]), 0)
+        self.assertEqual(out.getvalue(), "added 4\n")
+        ids = [item["id"] for item in store.load(self.path)["items"]]
+        self.assertEqual(sorted(ids), [3, 4])
 
     def test_save_round_trips(self):
         data = {"next_id": 2, "items": [{"id": 1, "text": "buy milk", "done": False}]}

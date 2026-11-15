@@ -6,6 +6,12 @@ import stat
 import tempfile
 
 
+# The largest item ID a valid file may hold (next_id may be one more): the
+# signed 64-bit maximum. It keeps every ID far below json's integer-to-string
+# limit, so a loaded list can always be saved; add refuses to go past it.
+MAX_ID = 2**63 - 1
+
+
 class StoreError(Exception):
     """The list file at ``path`` could not be read."""
 
@@ -30,30 +36,49 @@ def load(path):
         raise StoreError(path) from exc
     if not _valid(data):
         raise StoreError(path)
+    data["next_id"] = max(data["next_id"], _fresh_id(data["items"]))
     return data
+
+
+def _fresh_id(items):
+    """The lowest ID above every stored one, and at least 1."""
+    return max([0] + [item["id"] for item in items]) + 1
 
 
 def _is_int(value):
     return isinstance(value, int) and not isinstance(value, bool)
 
 
+def _is_item_id(value):
+    """True for an int from 1 to MAX_ID: an ID done and remove can reach."""
+    return _is_int(value) and 1 <= value <= MAX_ID
+
+
 def _valid_item(item):
     return (
         isinstance(item, dict)
-        and _is_int(item.get("id"))
+        and _is_item_id(item.get("id"))
         and isinstance(item.get("text"), str)
         and isinstance(item.get("done"), bool)
     )
 
 
 def _valid(data):
-    """True if data has the list's shape: an int next_id and a list of items."""
+    """True if data has the list's shape: an int next_id and items with unique IDs."""
     return (
         isinstance(data, dict)
         and _is_int(data.get("next_id"))
+        and data["next_id"] <= MAX_ID + 1
         and isinstance(data.get("items"), list)
         and all(_valid_item(item) for item in data["items"])
+        and _unique_ids(data["items"])
     )
+
+
+def _unique_ids(items):
+    """True if no two items share an ID."""
+    ids = [item["id"] for item in items]
+    return len(ids) == len(set(ids))
 
 
 def _file_mode(path):

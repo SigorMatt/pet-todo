@@ -1,0 +1,71 @@
+{
+  "url": "https://api.github.com/repos/SigorMatt/pet-todo/pulls/comments/4579401692",
+  "pull_request_review_id": 5911926830,
+  "id": 4579401692,
+  "node_id": "PRRC_kwDOVuotTc8AAAABEPQf3A",
+  "diff_hunk": "@@ -30,9 +30,15 @@ def load(path):\n         raise StoreError(path) from exc\n     if not _valid(data):\n         raise StoreError(path)\n+    data[\"next_id\"] = max(data[\"next_id\"], _fresh_id(data[\"items\"]))",
+  "path": "todo/store.py",
+  "commit_id": "41f5b7585b711869fa6e44c3ee4dde8e219e1122",
+  "original_commit_id": "f7e4e1692f8b920db9255de5984efbd78dda7d3d",
+  "user": {
+    "login": "qodo-code-review[bot]",
+    "id": 151058649,
+    "node_id": "BOT_kgDOCQD42Q",
+    "avatar_url": "https://avatars.githubusercontent.com/in/484649?v=4",
+    "gravatar_id": "",
+    "url": "https://api.github.com/users/qodo-code-review%5Bbot%5D",
+    "html_url": "https://github.com/apps/qodo-code-review",
+    "followers_url": "https://api.github.com/users/qodo-code-review%5Bbot%5D/followers",
+    "following_url": "https://api.github.com/users/qodo-code-review%5Bbot%5D/following{/other_user}",
+    "gists_url": "https://api.github.com/users/qodo-code-review%5Bbot%5D/gists{/gist_id}",
+    "starred_url": "https://api.github.com/users/qodo-code-review%5Bbot%5D/starred{/owner}{/repo}",
+    "subscriptions_url": "https://api.github.com/users/qodo-code-review%5Bbot%5D/subscriptions",
+    "organizations_url": "https://api.github.com/users/qodo-code-review%5Bbot%5D/orgs",
+    "repos_url": "https://api.github.com/users/qodo-code-review%5Bbot%5D/repos",
+    "events_url": "https://api.github.com/users/qodo-code-review%5Bbot%5D/events{/privacy}",
+    "received_events_url": "https://api.github.com/users/qodo-code-review%5Bbot%5D/received_events",
+    "type": "Bot",
+    "user_view_type": "public",
+    "site_admin": false
+  },
+  "body": "<img src=\"https://img.shields.io/badge/Medium-634FD1?style=flat-square\" height=\"20px\" alt=\"Remediation recommended\">\n\n2\\. Large stored ids make edits crash <code>🐞 Bug</code> <code>☼ Reliability</code>\n\n<pre>\n<b><i>load</i></b> repairs <b><i>next_id</i></b> by adding one to the largest stored ID without checking whether that result\ncan be serialized. If a hand-edited file contains a valid 4,300-digit item ID and a smaller\n<b><i>next_id</i></b>, the repaired counter has 4,301 digits; subsequent <b><i>add</i></b>, <b><i>done</i></b>, or <b><i>remove</i></b> saves raise\nan uncaught <b><i>ValueError</i></b> during JSON serialization.\n</pre>\n\n\n<details>\n<summary><strong>Agent Prompt</strong></summary>\n\n```\n## Issue description\nRepairing `next_id` from a maximum-length JSON integer can produce an integer that `json.dump` cannot serialize, causing mutating commands to crash.\n## Fix Focus Areas\n- todo/store.py[25-34]\n- todo/store.py[37-39]\n- tests/test_store.py[101-130]\n## Recommended Fix\nDetect a repaired counter that cannot be serialized and report it as a store error before a mutating command attempts to save. Add a test with a maximum-length stored ID and a low `next_id`.\n```\n\n<code>ⓘ Copy this prompt and use it to remediate the issue with your preferred AI generation tools</code>\n</details>\n\n[Dismiss ↗](https://app.qodo.ai/findings/17fac267-76e2-4a35-9537-e4e54baacb97?action=dismiss&origin=git) | [View ↗](https://app.qodo.ai/findings/17fac267-76e2-4a35-9537-e4e54baacb97)",
+  "created_at": "2026-11-15T17:25:10Z",
+  "updated_at": "2026-11-15T17:25:10Z",
+  "html_url": "https://github.com/SigorMatt/pet-todo/pull/3#discussion_r4579401692",
+  "pull_request_url": "https://api.github.com/repos/SigorMatt/pet-todo/pulls/3",
+  "_links": {
+    "self": {
+      "href": "https://api.github.com/repos/SigorMatt/pet-todo/pulls/comments/4579401692"
+    },
+    "html": {
+      "href": "https://github.com/SigorMatt/pet-todo/pull/3#discussion_r4579401692"
+    },
+    "pull_request": {
+      "href": "https://api.github.com/repos/SigorMatt/pet-todo/pulls/3"
+    }
+  },
+  "reactions": {
+    "url": "https://api.github.com/repos/SigorMatt/pet-todo/pulls/comments/4579401692/reactions",
+    "total_count": 0,
+    "+1": 0,
+    "-1": 0,
+    "laugh": 0,
+    "hooray": 0,
+    "confused": 0,
+    "heart": 0,
+    "rocket": 0,
+    "eyes": 0
+  },
+  "start_line": null,
+  "original_start_line": null,
+  "start_side": null,
+  "line": 39,
+  "original_line": 33,
+  "side": "RIGHT",
+  "author_association": "NONE",
+  "original_position": 4,
+  "position": 17,
+  "subject_type": "line",
+  "is_copilot_code_review": false,
+  "copilot_code_review_sources": []
+}

@@ -1,4 +1,4 @@
-"""Tests for todo.cli: add, list and error handling."""
+"""Tests for todo.cli: add, list, done, remove and error handling."""
 
 import contextlib
 import io
@@ -10,7 +10,7 @@ import tempfile
 import unittest
 from unittest import mock
 
-from todo import cli
+from todo import cli, store
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -49,6 +49,34 @@ class AddTest(CliTestCase):
         self.assertEqual(self.run_cli("add", "walk dog"), (0, "added 2\n", ""))
 
 
+    def _write_top_id(self, top):
+        data = {"next_id": 1, "items": [{"id": top, "text": "a", "done": False}]}
+        self.write(json.dumps(data))
+
+    def test_add_up_to_max_id_saves_a_loadable_file(self):
+        self._write_top_id(store.MAX_ID - 1)
+        self.assertEqual(
+            self.run_cli("add", "b"), (0, "added {}\n".format(store.MAX_ID), ""))
+        data = store.load(self.path)
+        self.assertEqual(data["next_id"], store.MAX_ID + 1)
+        self.assertEqual([i["id"] for i in data["items"]],
+                         [store.MAX_ID - 1, store.MAX_ID])
+
+    def test_add_above_max_id_cannot_write_and_saves_nothing(self):
+        for next_id in (1, store.MAX_ID + 1):
+            with self.subTest(next_id=next_id):
+                self.write(json.dumps({"next_id": next_id, "items": [
+                    {"id": store.MAX_ID, "text": "a", "done": False}]}))
+                with open(self.path, "rb") as f:
+                    before = f.read()
+                self.assertEqual(
+                    self.run_cli("add", "b"),
+                    (1, "", "todo: cannot write {}\n".format(self.path)))
+                with open(self.path, "rb") as f:
+                    self.assertEqual(f.read(), before)
+                self.assertEqual(self.run_cli("list"), (0, "{} [ ] a\n".format(store.MAX_ID), ""))
+
+
 class ListTest(CliTestCase):
     def test_lists_items_in_id_order(self):
         self.run_cli("add", "buy milk")
@@ -73,6 +101,145 @@ class ListTest(CliTestCase):
     def test_empty_list_prints_nothing(self):
         self.write(json.dumps({"next_id": 1, "items": []}))
         self.assertEqual(self.run_cli("list"), (0, "", ""))
+
+
+class DoneTest(CliTestCase):
+    def setUp(self):
+        super().setUp()
+        self.run_cli("add", "buy milk")
+        self.run_cli("add", "walk dog")
+
+    def test_done_prints_id_and_saves(self):
+        self.assertEqual(self.run_cli("done", "1"), (0, "done 1\n", ""))
+        with open(self.path, encoding="utf-8") as f:
+            items = json.load(f)["items"]
+        self.assertEqual([i["done"] for i in items], [True, False])
+
+    def test_list_hides_done_and_all_shows_x(self):
+        self.run_cli("done", "1")
+        self.assertEqual(self.run_cli("list"), (0, "2 [ ] walk dog\n", ""))
+        self.assertEqual(
+            self.run_cli("list", "--all"),
+            (0, "1 [x] buy milk\n2 [ ] walk dog\n", ""),
+        )
+
+    def test_done_twice_is_not_an_error(self):
+        self.run_cli("done", "2")
+        self.assertEqual(self.run_cli("done", "2"), (0, "done 2\n", ""))
+        self.assertEqual(
+            self.run_cli("list", "--all"),
+            (0, "1 [ ] buy milk\n2 [x] walk dog\n", ""),
+        )
+
+
+class RemoveTest(CliTestCase):
+    def setUp(self):
+        super().setUp()
+        self.run_cli("add", "buy milk")
+        self.run_cli("add", "walk dog")
+
+    def test_remove_prints_id_and_deletes(self):
+        self.assertEqual(self.run_cli("remove", "1"), (0, "removed 1\n", ""))
+        self.assertEqual(self.run_cli("list", "--all"), (0, "2 [ ] walk dog\n", ""))
+
+    def test_remove_done_item(self):
+        self.run_cli("done", "2")
+        self.assertEqual(self.run_cli("remove", "2"), (0, "removed 2\n", ""))
+        self.assertEqual(self.run_cli("list", "--all"), (0, "1 [ ] buy milk\n", ""))
+
+    def test_ids_not_reused_after_removing_highest(self):
+        self.run_cli("remove", "2")
+        self.assertEqual(self.run_cli("add", "feed cat"), (0, "added 3\n", ""))
+        self.run_cli("remove", "3")
+        self.run_cli("remove", "1")
+        self.assertEqual(self.run_cli("add", "water plants"), (0, "added 4\n", ""))
+        self.assertEqual(self.run_cli("list"), (0, "4 [ ] water plants\n", ""))
+
+
+class NoItemTest(CliTestCase):
+    def test_unknown_or_non_integer_id(self):
+        self.run_cli("add", "buy milk")
+        with open(self.path, encoding="utf-8") as f:
+            before = f.read()
+        for command in ("done", "remove"):
+            for raw in ("2", "0", "-1", "abc", "1.5", ""):
+                with self.subTest(command=command, raw=raw):
+                    self.assertEqual(
+                        self.run_cli(command, raw),
+                        (1, "", "todo: no item {}\n".format(raw)),
+                    )
+        with open(self.path, encoding="utf-8") as f:
+            self.assertEqual(f.read(), before)
+
+    def test_id_must_be_plain_ascii_digits(self):
+        for text in ("a", "b", "c"):
+            self.run_cli("add", text)
+        with open(self.path, encoding="utf-8") as f:
+            before = f.read()
+        for command in ("done", "remove"):
+            for raw in (" 1", "1 ", "+2", "\u0663", "1_0", "\uff11"):
+                with self.subTest(command=command, raw=raw):
+                    self.assertEqual(
+                        self.run_cli(command, raw),
+                        (1, "", "todo: no item {}\n".format(raw)),
+                    )
+        with open(self.path, encoding="utf-8") as f:
+            self.assertEqual(f.read(), before)
+
+    def test_dash_id_is_no_item_not_an_option(self):
+        self.run_cli("add", "buy milk")
+        for command in ("done", "remove"):
+            for raw in ("-x", "-1", "--all", "-", "--", "-1x"):
+                with self.subTest(command=command, raw=raw):
+                    self.assertEqual(
+                        self.run_cli(command, raw),
+                        (1, "", "todo: no item {}\n".format(raw)),
+                    )
+
+    def test_help_still_shows_help(self):
+        for argv in (["-h"], ["--help"], ["add", "-h"], ["list", "-h"],
+                     ["add", "--help"], ["list", "--help"]):
+            with self.subTest(argv=argv):
+                with self.assertRaises(SystemExit) as cm:
+                    self.run_cli(*argv)
+                self.assertEqual(cm.exception.code, 0)
+
+    def test_help_flag_after_done_or_remove_is_an_id(self):
+        self.run_cli("add", "buy milk")
+        for command in ("done", "remove"):
+            for raw in ("-h", "--help"):
+                with self.subTest(command=command, raw=raw):
+                    self.assertEqual(
+                        self.run_cli(command, raw),
+                        (1, "", "todo: no item {}\n".format(raw)),
+                    )
+
+    def test_overlong_digit_id_is_no_item(self):
+        self.run_cli("add", "buy milk")
+        raw = "1" * 5000
+        for command in ("done", "remove"):
+            with self.subTest(command=command):
+                self.assertEqual(
+                    self.run_cli(command, raw),
+                    (1, "", "todo: no item {}\n".format(raw)),
+                )
+
+    def test_unknown_id_on_missing_file(self):
+        for command in ("done", "remove"):
+            with self.subTest(command=command):
+                self.assertEqual(
+                    self.run_cli(command, "1"), (1, "", "todo: no item 1\n")
+                )
+        self.assertFalse(os.path.exists(self.path))
+
+    def test_removed_id_is_unknown(self):
+        self.run_cli("add", "buy milk")
+        self.run_cli("remove", "1")
+        for command in ("done", "remove"):
+            with self.subTest(command=command):
+                self.assertEqual(
+                    self.run_cli(command, "1"), (1, "", "todo: no item 1\n")
+                )
 
 
 class ErrorTest(CliTestCase):
@@ -128,7 +295,8 @@ class ErrorTest(CliTestCase):
                 )
 
     def test_usage_errors_exit_1_with_message(self):
-        for argv in ([], ["frobnicate"], ["add"], ["list", "extra"]):
+        for argv in ([], ["frobnicate"], ["add"], ["list", "extra"],
+                     ["done"], ["remove"], ["done", "1", "2"]):
             with self.subTest(argv=argv):
                 code, out, err = self.run_cli(*argv)
                 self.assertEqual((code, out), (1, ""))
@@ -149,6 +317,17 @@ class SubprocessTest(CliTestCase):
         self.assertTrue(os.path.exists(self.path))
         r = self.run_module("list")
         self.assertEqual((r.returncode, r.stdout, r.stderr), (0, "1 [ ] buy milk\n", ""))
+
+    def test_done_remove_and_unknown_id(self):
+        self.run_module("add", "buy milk")
+        r = self.run_module("done", "1")
+        self.assertEqual((r.returncode, r.stdout, r.stderr), (0, "done 1\n", ""))
+        r = self.run_module("list", "--all")
+        self.assertEqual((r.returncode, r.stdout, r.stderr), (0, "1 [x] buy milk\n", ""))
+        r = self.run_module("remove", "1")
+        self.assertEqual((r.returncode, r.stdout, r.stderr), (0, "removed 1\n", ""))
+        r = self.run_module("done", "1")
+        self.assertEqual((r.returncode, r.stdout, r.stderr), (1, "", "todo: no item 1\n"))
 
     def test_usage_error(self):
         r = self.run_module("bogus")
