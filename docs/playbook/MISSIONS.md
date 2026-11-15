@@ -10,7 +10,7 @@ step: gate
 pr: 3
 cursor: 6897870993
 counter: 0
-intent: none
+intent: merge PR #3 at 813359ce2ae84f90f8b713cf1332a4ed39532757
 waiting_for_owner: no
 status: running
 mission_started: 2026-11-15T17:07:29Z
