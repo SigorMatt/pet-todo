@@ -103,6 +103,86 @@ class ListTest(CliTestCase):
         self.assertEqual(self.run_cli("list"), (0, "", ""))
 
 
+class DueTest(CliTestCase):
+    def read_json(self):
+        with open(self.path, encoding="utf-8") as f:
+            return json.load(f)
+
+    def test_add_with_due_stores_date_and_list_shows_it(self):
+        self.assertEqual(
+            self.run_cli("add", "buy milk", "--due", "2026-11-20"), (0, "added 1\n", ""))
+        self.assertEqual(self.read_json()["items"], [
+            {"id": 1, "text": "buy milk", "done": False, "due": "2026-11-20"}])
+        self.assertEqual(
+            self.run_cli("list"), (0, "1 [ ] buy milk (due 2026-11-20)\n", ""))
+
+    def test_due_before_text_also_works(self):
+        self.assertEqual(
+            self.run_cli("add", "--due", "2024-02-29", "leap"), (0, "added 1\n", ""))
+        self.assertEqual(self.read_json()["items"][0]["due"], "2024-02-29")
+
+    def test_items_without_due_show_no_suffix(self):
+        self.run_cli("add", "buy milk")
+        self.run_cli("add", "walk dog", "--due", "2026-12-01")
+        self.assertNotIn("due", self.read_json()["items"][0])
+        self.assertEqual(
+            self.run_cli("list"),
+            (0, "1 [ ] buy milk\n2 [ ] walk dog (due 2026-12-01)\n", ""))
+
+    def test_list_all_shows_due_on_done_items(self):
+        self.run_cli("add", "buy milk", "--due", "2026-11-20")
+        self.run_cli("add", "walk dog")
+        self.run_cli("done", "1")
+        self.assertEqual(self.run_cli("list"), (0, "2 [ ] walk dog\n", ""))
+        self.assertEqual(
+            self.run_cli("list", "--all"),
+            (0, "1 [x] buy milk (due 2026-11-20)\n2 [ ] walk dog\n", ""))
+
+    def test_due_survives_done_and_remove_saves(self):
+        self.run_cli("add", "a", "--due", "2026-11-20")
+        self.run_cli("add", "b")
+        self.run_cli("done", "1")
+        self.run_cli("remove", "2")
+        self.assertEqual(self.read_json()["items"], [
+            {"id": 1, "text": "a", "done": True, "due": "2026-11-20"}])
+
+    def test_bad_date_exits_1_and_leaves_file_unchanged(self):
+        self.run_cli("add", "keep", "--due", "2026-11-20")
+        with open(self.path, "rb") as f:
+            before = f.read()
+        bad = ("2026-13-01", "2026-02-30", "tomorrow", "2026-1-5", "",
+               "20261120", "2026-11-20T00:00", " 2026-11-20", "2026-11-20\n",
+               "\uff12\uff10\uff12\uff16-11-20", "2025-02-29", "2026-00-10")
+        for value in bad:
+            with self.subTest(value=value):
+                self.assertEqual(
+                    self.run_cli("add", "x", "--due", value),
+                    (1, "", "todo: bad date {}\n".format(value)))
+                with open(self.path, "rb") as f:
+                    self.assertEqual(f.read(), before)
+
+    def test_bad_date_on_missing_file_creates_nothing(self):
+        self.assertEqual(
+            self.run_cli("add", "x", "--due", "tomorrow"),
+            (1, "", "todo: bad date tomorrow\n"))
+        self.assertFalse(os.path.exists(self.path))
+
+    def test_stored_bad_due_cannot_read(self):
+        item = {"id": 1, "text": "a", "done": False}
+        for due in (20261120, None, True, ["2026-11-20"], "2026-13-01",
+                    "2026-02-30", "tomorrow", "2026-1-5", "20261120"):
+            for argv in (["list"], ["list", "--all"], ["add", "b"], ["done", "1"]):
+                with self.subTest(due=due, argv=argv):
+                    self.write(json.dumps({"next_id": 2, "items": [dict(item, due=due)]}))
+                    with open(self.path, "rb") as f:
+                        before = f.read()
+                    self.assertEqual(
+                        self.run_cli(*argv),
+                        (1, "", "todo: cannot read {}\n".format(self.path)))
+                    with open(self.path, "rb") as f:
+                        self.assertEqual(f.read(), before)
+
+
 class DoneTest(CliTestCase):
     def setUp(self):
         super().setUp()

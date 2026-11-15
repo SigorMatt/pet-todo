@@ -26,6 +26,14 @@ class NoItemError(Exception):
         super().__init__("no item {}".format(raw))
 
 
+class BadDateError(Exception):
+    """``raw`` is not a real date in the form YYYY-MM-DD."""
+
+    def __init__(self, raw):
+        self.raw = raw
+        super().__init__("bad date {}".format(raw))
+
+
 class _Parser(argparse.ArgumentParser):
     def error(self, message):
         raise UsageError(message)
@@ -38,6 +46,7 @@ def _build_parser():
 
     add = commands.add_parser("add", help="add an open item")
     add.add_argument("text", help="what to do")
+    add.add_argument("--due", metavar="YYYY-MM-DD", help="the item's due date")
 
     lst = commands.add_parser("list", help="list open items by ID")
     lst.add_argument("--all", action="store_true", help="include done items")
@@ -72,11 +81,16 @@ def _find(data, raw):
 
 
 def _cmd_add(args, path):
+    if args.due is not None and not store.is_iso_date(args.due):
+        raise BadDateError(args.due)
     data = store.load(path)
     item_id = data["next_id"]
     if item_id > store.MAX_ID:
         raise WriteError(path)
-    data["items"].append({"id": item_id, "text": args.text, "done": False})
+    item = {"id": item_id, "text": args.text, "done": False}
+    if args.due is not None:
+        item["due"] = args.due
+    data["items"].append(item)
     data["next_id"] = item_id + 1
     _save(path, data)
     print("added {}".format(item_id))
@@ -88,7 +102,8 @@ def _cmd_list(args, path):
         if item["done"] and not args.all:
             continue
         mark = "x" if item["done"] else " "
-        print("{} [{}] {}".format(item["id"], mark, item["text"]))
+        due = " (due {})".format(item["due"]) if "due" in item else ""
+        print("{} [{}] {}{}".format(item["id"], mark, item["text"], due))
 
 
 def _cmd_done(args, path):
@@ -142,7 +157,7 @@ def main(argv=None):
     except store.StoreError as exc:
         print("todo: cannot read {}".format(exc.path), file=sys.stderr)
         return 1
-    except (WriteError, NoItemError) as exc:
+    except (WriteError, NoItemError, BadDateError) as exc:
         print("todo: {}".format(exc), file=sys.stderr)
         return 1
     return 0
