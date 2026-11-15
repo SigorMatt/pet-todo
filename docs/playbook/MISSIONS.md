@@ -54,6 +54,8 @@ Owned by the lead. Only `room.py` edits the block above (`state set`, `state nex
 | --- | --- | --- | --- |
 | M2-T1 | builder a62f6a1ec7ed2c6ee (worktree) | 1 | merged cb5f417 |
 | M2-T2 | builder a47810d72aee0e554 (worktree) | 1 | merged 3759fc6 |
+| M2-FIX1 (R1-1, R1-2) | builder a62f6a1ec7ed2c6ee (resumed) | 1 | running |
+| M2-FIX2 (R1-3) | builder a47810d72aee0e554 (resumed) | 1 | running |
 
 ### Parked questions
 
