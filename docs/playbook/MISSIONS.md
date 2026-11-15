@@ -10,7 +10,7 @@ step: plan
 pr: none
 cursor: none
 counter: 0
-intent: none
+intent: post PLAN in room 1 after #6897608107
 waiting_for_owner: no
 status: running
 mission_started: none
