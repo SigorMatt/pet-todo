@@ -169,12 +169,22 @@ class NoItemTest(CliTestCase):
                     )
 
     def test_help_still_shows_help(self):
+        for argv in (["-h"], ["--help"], ["add", "-h"], ["list", "-h"],
+                     ["add", "--help"], ["list", "--help"]):
+            with self.subTest(argv=argv):
+                with self.assertRaises(SystemExit) as cm:
+                    self.run_cli(*argv)
+                self.assertEqual(cm.exception.code, 0)
+
+    def test_help_flag_after_done_or_remove_is_an_id(self):
+        self.run_cli("add", "buy milk")
         for command in ("done", "remove"):
-            for flag in ("-h", "--help"):
-                with self.subTest(command=command, flag=flag):
-                    with self.assertRaises(SystemExit) as cm:
-                        self.run_cli(command, flag)
-                    self.assertEqual(cm.exception.code, 0)
+            for raw in ("-h", "--help"):
+                with self.subTest(command=command, raw=raw):
+                    self.assertEqual(
+                        self.run_cli(command, raw),
+                        (1, "", "todo: no item {}\n".format(raw)),
+                    )
 
     def test_unknown_id_on_missing_file(self):
         for command in ("done", "remove"):

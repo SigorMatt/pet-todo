@@ -114,16 +114,11 @@ _ID_COMMANDS = ("done", "remove")
 
 
 def _protect_id(argv):
-    """Mark a lone ID after done/remove as positional, so ``-x`` is an ID, not an option.
+    """Mark a lone argument after done/remove as positional: it is always the ID.
 
-    ``-h`` and ``--help`` are left alone so they still show help.
+    So ``-x``, ``-h`` and ``--help`` there are IDs, not options.
     """
-    if (
-        len(argv) == 2
-        and argv[0] in _ID_COMMANDS
-        and argv[1].startswith("-")
-        and argv[1] not in ("-h", "--help")
-    ):
+    if len(argv) == 2 and argv[0] in _ID_COMMANDS and argv[1].startswith("-"):
         return [argv[0], "--", argv[1]]
     return argv
 
