@@ -1,7 +1,7 @@
 # Missions
 
 ```agent-room-state
-lease_session: 635a4978
+lease_session: none
 lease_generation: 1
 phase: 1
 room: 1
