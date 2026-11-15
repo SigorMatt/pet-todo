@@ -1,0 +1,71 @@
+{
+  "url": "https://api.github.com/repos/SigorMatt/pet-todo/pulls/comments/4579258254",
+  "pull_request_review_id": 5911767072,
+  "id": 4579258254,
+  "node_id": "PRRC_kwDOVuotTc8AAAABEPHvjg",
+  "diff_hunk": "@@ -0,0 +1,78 @@\n+\"\"\"Parse arguments, call the store and print results.\"\"\"\n+\n+import argparse\n+import sys\n+\n+from todo import store\n+\n+\n+class UsageError(Exception):\n+    \"\"\"A command line that could not be parsed.\"\"\"\n+\n+\n+class WriteError(Exception):\n+    \"\"\"The list file at ``path`` could not be written.\"\"\"\n+\n+    def __init__(self, path):\n+        self.path = path\n+        super().__init__(\"cannot write {}\".format(path))\n+\n+\n+class _Parser(argparse.ArgumentParser):\n+    def error(self, message):\n+        raise UsageError(message)\n+\n+\n+def _build_parser():\n+    parser = _Parser(prog=\"todo\", description=\"A small command-line to-do list.\")\n+    commands = parser.add_subparsers(dest=\"command\", metavar=\"command\")\n+    commands.required = True\n+\n+    add = commands.add_parser(\"add\", help=\"add an open item\")\n+    add.add_argument(\"text\", help=\"what to do\")\n+\n+    commands.add_parser(\"list\", help=\"list open items by ID\")\n+    return parser\n+\n+\n+def _cmd_add(args, path):\n+    data = store.load(path)\n+    item_id = data[\"next_id\"]\n+    data[\"items\"].append({\"id\": item_id, \"text\": args.text, \"done\": False})\n+    data[\"next_id\"] = item_id + 1\n+    try:\n+        store.save(path, data)\n+    except OSError as exc:\n+        raise WriteError(path) from exc\n+    print(\"added {}\".format(item_id))\n+\n+\n+def _cmd_list(args, path):\n+    data = store.load(path)\n+    for item in sorted(data[\"items\"], key=lambda i: i[\"id\"]):\n+        if item.get(\"done\"):\n+            continue\n+        print(\"{} [ ] {}\".format(item[\"id\"], item[\"text\"]))",
+  "path": "todo/cli.py",
+  "commit_id": "05110a1f291bccb1e349968a5108546b9e1f4b2f",
+  "original_commit_id": "05110a1f291bccb1e349968a5108546b9e1f4b2f",
+  "user": {
+    "login": "qodo-code-review[bot]",
+    "id": 151058649,
+    "node_id": "BOT_kgDOCQD42Q",
+    "avatar_url": "https://avatars.githubusercontent.com/in/484649?v=4",
+    "gravatar_id": "",
+    "url": "https://api.github.com/users/qodo-code-review%5Bbot%5D",
+    "html_url": "https://github.com/apps/qodo-code-review",
+    "followers_url": "https://api.github.com/users/qodo-code-review%5Bbot%5D/followers",
+    "following_url": "https://api.github.com/users/qodo-code-review%5Bbot%5D/following{/other_user}",
+    "gists_url": "https://api.github.com/users/qodo-code-review%5Bbot%5D/gists{/gist_id}",
+    "starred_url": "https://api.github.com/users/qodo-code-review%5Bbot%5D/starred{/owner}{/repo}",
+    "subscriptions_url": "https://api.github.com/users/qodo-code-review%5Bbot%5D/subscriptions",
+    "organizations_url": "https://api.github.com/users/qodo-code-review%5Bbot%5D/orgs",
+    "repos_url": "https://api.github.com/users/qodo-code-review%5Bbot%5D/repos",
+    "events_url": "https://api.github.com/users/qodo-code-review%5Bbot%5D/events{/privacy}",
+    "received_events_url": "https://api.github.com/users/qodo-code-review%5Bbot%5D/received_events",
+    "type": "Bot",
+    "user_view_type": "public",
+    "site_admin": false
+  },
+  "body": "<img src=\"https://img.shields.io/badge/Medium-634FD1?style=flat-square\" height=\"20px\" alt=\"Remediation recommended\">\n\n3\\. One task can make every list fail <code>🐞 Bug</code> <code>☼ Reliability</code>\n\n<pre>\n<b><i>add</i></b> stores argument text unchanged, while <b><i>_cmd_list</i></b> prints it without handling an encoding\nfailure. When an argument contains undecodable bytes represented as surrogate characters and stdout\nuses strict UTF-8, subsequent lists raise <b><i>UnicodeEncodeError</i></b> instead of returning a CLI error.\n</pre>\n\n\n<details>\n<summary><strong>Agent Prompt</strong></summary>\n\n```\n## Issue description\nText accepted by add can later make list crash on strict UTF-8 stdout.\n## Fix Focus Areas\n- todo/cli.py[38-55]\n- todo/store.py[40-46]\n## Recommended Fix\nChoose a consistent policy for surrogate-containing text: reject it before saving or encode it into a printable representation. Apply that policy when loading existing files too, so a previously stored item cannot crash list.\n```\n\n<code>ⓘ Copy this prompt and use it to remediate the issue with your preferred AI generation tools</code>\n</details>\n\n[Dismiss ↗](https://app.qodo.ai/findings/a303a4f3-157b-466f-ba2a-349f4acb6f39?action=dismiss&origin=git) | [View ↗](https://app.qodo.ai/findings/a303a4f3-157b-466f-ba2a-349f4acb6f39)",
+  "created_at": "2026-11-15T16:42:33Z",
+  "updated_at": "2026-11-15T16:42:33Z",
+  "html_url": "https://github.com/SigorMatt/pet-todo/pull/2#discussion_r4579258254",
+  "pull_request_url": "https://api.github.com/repos/SigorMatt/pet-todo/pulls/2",
+  "_links": {
+    "self": {
+      "href": "https://api.github.com/repos/SigorMatt/pet-todo/pulls/comments/4579258254"
+    },
+    "html": {
+      "href": "https://github.com/SigorMatt/pet-todo/pull/2#discussion_r4579258254"
+    },
+    "pull_request": {
+      "href": "https://api.github.com/repos/SigorMatt/pet-todo/pulls/2"
+    }
+  },
+  "reactions": {
+    "url": "https://api.github.com/repos/SigorMatt/pet-todo/pulls/comments/4579258254/reactions",
+    "total_count": 0,
+    "+1": 0,
+    "-1": 0,
+    "laugh": 0,
+    "hooray": 0,
+    "confused": 0,
+    "heart": 0,
+    "rocket": 0,
+    "eyes": 0
+  },
+  "start_line": null,
+  "original_start_line": null,
+  "start_side": null,
+  "line": 55,
+  "original_line": 55,
+  "side": "RIGHT",
+  "author_association": "NONE",
+  "original_position": 55,
+  "position": 55,
+  "subject_type": "line",
+  "is_copilot_code_review": false,
+  "copilot_code_review_sources": []
+}

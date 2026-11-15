@@ -1,0 +1,42 @@
+{
+  "id": 5911767072,
+  "node_id": "PRR_kwDOVuotTc8AAAABYF5oIA",
+  "user": {
+    "login": "qodo-code-review[bot]",
+    "id": 151058649,
+    "node_id": "BOT_kgDOCQD42Q",
+    "avatar_url": "https://avatars.githubusercontent.com/in/484649?v=4",
+    "gravatar_id": "",
+    "url": "https://api.github.com/users/qodo-code-review%5Bbot%5D",
+    "html_url": "https://github.com/apps/qodo-code-review",
+    "followers_url": "https://api.github.com/users/qodo-code-review%5Bbot%5D/followers",
+    "following_url": "https://api.github.com/users/qodo-code-review%5Bbot%5D/following{/other_user}",
+    "gists_url": "https://api.github.com/users/qodo-code-review%5Bbot%5D/gists{/gist_id}",
+    "starred_url": "https://api.github.com/users/qodo-code-review%5Bbot%5D/starred{/owner}{/repo}",
+    "subscriptions_url": "https://api.github.com/users/qodo-code-review%5Bbot%5D/subscriptions",
+    "organizations_url": "https://api.github.com/users/qodo-code-review%5Bbot%5D/orgs",
+    "repos_url": "https://api.github.com/users/qodo-code-review%5Bbot%5D/repos",
+    "events_url": "https://api.github.com/users/qodo-code-review%5Bbot%5D/events{/privacy}",
+    "received_events_url": "https://api.github.com/users/qodo-code-review%5Bbot%5D/received_events",
+    "type": "Bot",
+    "user_view_type": "public",
+    "site_admin": false
+  },
+  "body": "",
+  "state": "COMMENTED",
+  "html_url": "https://github.com/SigorMatt/pet-todo/pull/2#pullrequestreview-5911767072",
+  "pull_request_url": "https://api.github.com/repos/SigorMatt/pet-todo/pulls/2",
+  "author_association": "NONE",
+  "is_copilot_code_review": false,
+  "copilot_code_review_effort": null,
+  "_links": {
+    "html": {
+      "href": "https://github.com/SigorMatt/pet-todo/pull/2#pullrequestreview-5911767072"
+    },
+    "pull_request": {
+      "href": "https://api.github.com/repos/SigorMatt/pet-todo/pulls/2"
+    }
+  },
+  "submitted_at": "2026-11-15T16:42:33Z",
+  "commit_id": "05110a1f291bccb1e349968a5108546b9e1f4b2f"
+}

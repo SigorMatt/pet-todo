@@ -1,0 +1,71 @@
+{
+  "url": "https://api.github.com/repos/SigorMatt/pet-todo/pulls/comments/4579258256",
+  "pull_request_review_id": 5911767072,
+  "id": 4579258256,
+  "node_id": "PRRC_kwDOVuotTc8AAAABEPHvkA",
+  "diff_hunk": "@@ -0,0 +1,78 @@\n+\"\"\"Parse arguments, call the store and print results.\"\"\"\n+\n+import argparse\n+import sys\n+\n+from todo import store\n+\n+\n+class UsageError(Exception):\n+    \"\"\"A command line that could not be parsed.\"\"\"\n+\n+\n+class WriteError(Exception):\n+    \"\"\"The list file at ``path`` could not be written.\"\"\"\n+\n+    def __init__(self, path):\n+        self.path = path\n+        super().__init__(\"cannot write {}\".format(path))\n+\n+\n+class _Parser(argparse.ArgumentParser):\n+    def error(self, message):\n+        raise UsageError(message)\n+\n+\n+def _build_parser():\n+    parser = _Parser(prog=\"todo\", description=\"A small command-line to-do list.\")\n+    commands = parser.add_subparsers(dest=\"command\", metavar=\"command\")\n+    commands.required = True\n+\n+    add = commands.add_parser(\"add\", help=\"add an open item\")\n+    add.add_argument(\"text\", help=\"what to do\")\n+\n+    commands.add_parser(\"list\", help=\"list open items by ID\")\n+    return parser\n+\n+\n+def _cmd_add(args, path):\n+    data = store.load(path)\n+    item_id = data[\"next_id\"]\n+    data[\"items\"].append({\"id\": item_id, \"text\": args.text, \"done\": False})",
+  "path": "todo/cli.py",
+  "commit_id": "05110a1f291bccb1e349968a5108546b9e1f4b2f",
+  "original_commit_id": "05110a1f291bccb1e349968a5108546b9e1f4b2f",
+  "user": {
+    "login": "qodo-code-review[bot]",
+    "id": 151058649,
+    "node_id": "BOT_kgDOCQD42Q",
+    "avatar_url": "https://avatars.githubusercontent.com/in/484649?v=4",
+    "gravatar_id": "",
+    "url": "https://api.github.com/users/qodo-code-review%5Bbot%5D",
+    "html_url": "https://github.com/apps/qodo-code-review",
+    "followers_url": "https://api.github.com/users/qodo-code-review%5Bbot%5D/followers",
+    "following_url": "https://api.github.com/users/qodo-code-review%5Bbot%5D/following{/other_user}",
+    "gists_url": "https://api.github.com/users/qodo-code-review%5Bbot%5D/gists{/gist_id}",
+    "starred_url": "https://api.github.com/users/qodo-code-review%5Bbot%5D/starred{/owner}{/repo}",
+    "subscriptions_url": "https://api.github.com/users/qodo-code-review%5Bbot%5D/subscriptions",
+    "organizations_url": "https://api.github.com/users/qodo-code-review%5Bbot%5D/orgs",
+    "repos_url": "https://api.github.com/users/qodo-code-review%5Bbot%5D/repos",
+    "events_url": "https://api.github.com/users/qodo-code-review%5Bbot%5D/events{/privacy}",
+    "received_events_url": "https://api.github.com/users/qodo-code-review%5Bbot%5D/received_events",
+    "type": "Bot",
+    "user_view_type": "public",
+    "site_admin": false
+  },
+  "body": "<img src=\"https://img.shields.io/badge/Medium-634FD1?style=flat-square\" height=\"20px\" alt=\"Remediation recommended\">\n\n4\\. Task text can impersonate list entries <code>🐞 Bug</code> <code>≡ Correctness</code>\n\n<pre>\n<b><i>_cmd_add</i></b> saves text containing newlines, and <b><i>_cmd_list</i></b> inserts that text directly into its\none-line item format. An argument containing a newline and a fabricated ID therefore makes one\nstored item appear as multiple entries, including an entry that was never added.\n</pre>\n\n\n<details>\n<summary><strong>Agent Prompt</strong></summary>\n\n```\n## Issue description\nEmbedded newlines allow a task's text to masquerade as additional list entries.\n## Fix Focus Areas\n- todo/cli.py[38-55]\n## Recommended Fix\nDefine whether multiline input is rejected or displayed with escaped line breaks. Enforce that choice on add and on list output from existing files so each displayed item remains unambiguous.\n```\n\n<code>ⓘ Copy this prompt and use it to remediate the issue with your preferred AI generation tools</code>\n</details>\n\n[Dismiss ↗](https://app.qodo.ai/findings/ade66514-5e6a-498e-b515-edb5bb3d47c2?action=dismiss&origin=git) | [View ↗](https://app.qodo.ai/findings/ade66514-5e6a-498e-b515-edb5bb3d47c2)",
+  "created_at": "2026-11-15T16:42:33Z",
+  "updated_at": "2026-11-15T16:42:33Z",
+  "html_url": "https://github.com/SigorMatt/pet-todo/pull/2#discussion_r4579258256",
+  "pull_request_url": "https://api.github.com/repos/SigorMatt/pet-todo/pulls/2",
+  "_links": {
+    "self": {
+      "href": "https://api.github.com/repos/SigorMatt/pet-todo/pulls/comments/4579258256"
+    },
+    "html": {
+      "href": "https://github.com/SigorMatt/pet-todo/pull/2#discussion_r4579258256"
+    },
+    "pull_request": {
+      "href": "https://api.github.com/repos/SigorMatt/pet-todo/pulls/2"
+    }
+  },
+  "reactions": {
+    "url": "https://api.github.com/repos/SigorMatt/pet-todo/pulls/comments/4579258256/reactions",
+    "total_count": 0,
+    "+1": 0,
+    "-1": 0,
+    "laugh": 0,
+    "hooray": 0,
+    "confused": 0,
+    "heart": 0,
+    "rocket": 0,
+    "eyes": 0
+  },
+  "start_line": null,
+  "original_start_line": null,
+  "start_side": null,
+  "line": 41,
+  "original_line": 41,
+  "side": "RIGHT",
+  "author_association": "NONE",
+  "original_position": 41,
+  "position": 41,
+  "subject_type": "line",
+  "is_copilot_code_review": false,
+  "copilot_code_review_sources": []
+}
