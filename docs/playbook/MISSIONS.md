@@ -6,7 +6,7 @@ lease_generation: 3
 phase: 1
 room: 1
 mission: M3
-step: Qodo first review
+step: scoped 1 for gate
 pr: 4
 cursor: 6898483510
 counter: 0
