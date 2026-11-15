@@ -61,7 +61,10 @@ def _find(data, raw):
     """Return the index of the item whose ID is raw, which must be ASCII digits."""
     if not (raw.isascii() and raw.isdigit()):
         raise NoItemError(raw)
-    item_id = int(raw)
+    try:
+        item_id = int(raw)
+    except ValueError:  # too many digits for int(); no stored ID is that long
+        raise NoItemError(raw) from None
     for index, item in enumerate(data["items"]):
         if item["id"] == item_id:
             return index

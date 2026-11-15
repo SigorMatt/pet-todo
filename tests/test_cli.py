@@ -186,6 +186,16 @@ class NoItemTest(CliTestCase):
                         (1, "", "todo: no item {}\n".format(raw)),
                     )
 
+    def test_overlong_digit_id_is_no_item(self):
+        self.run_cli("add", "buy milk")
+        raw = "1" * 5000
+        for command in ("done", "remove"):
+            with self.subTest(command=command):
+                self.assertEqual(
+                    self.run_cli(command, raw),
+                    (1, "", "todo: no item {}\n".format(raw)),
+                )
+
     def test_unknown_id_on_missing_file(self):
         for command in ("done", "remove"):
             with self.subTest(command=command):
