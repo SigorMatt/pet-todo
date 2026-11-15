@@ -95,6 +95,30 @@ class StoreTest(unittest.TestCase):
         self.assertEqual(os.listdir(sub), ["real.json"])
         self.assertEqual(store.load(self.path), data)
 
+    def _mode(self, path):
+        return os.stat(path).st_mode & 0o7777
+
+    @unittest.skipUnless(os.name == "posix", "needs POSIX permissions")
+    def test_save_keeps_existing_permissions(self):
+        for mode in (0o644, 0o640, 0o600):
+            with self.subTest(mode=oct(mode)):
+                store.save(self.path, {"next_id": 1, "items": []})
+                os.chmod(self.path, mode)
+                store.save(self.path, {"next_id": 2, "items": []})
+                self.assertEqual(self._mode(self.path), mode)
+
+    @unittest.skipUnless(os.name == "posix", "needs POSIX permissions")
+    def test_new_file_gets_default_mode_from_umask(self):
+        for umask, mode in ((0o022, 0o644), (0o027, 0o640), (0o002, 0o664)):
+            with self.subTest(umask=oct(umask)):
+                old = os.umask(umask)
+                try:
+                    store.save(self.path, {"next_id": 1, "items": []})
+                finally:
+                    os.umask(old)
+                self.assertEqual(self._mode(self.path), mode)
+                os.unlink(self.path)
+
     def _assert_failed_write_keeps_original(self, target):
         original = {"next_id": 2, "items": [{"id": 1, "text": "old", "done": False}]}
         store.save(self.path, original)

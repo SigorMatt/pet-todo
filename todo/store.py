@@ -2,6 +2,7 @@
 
 import json
 import os
+import stat
 import tempfile
 
 
@@ -55,6 +56,16 @@ def _valid(data):
     )
 
 
+def _file_mode(path):
+    """Mode for the saved file: path's current bits, else 0666 masked by the umask."""
+    try:
+        return stat.S_IMODE(os.stat(path).st_mode)
+    except FileNotFoundError:
+        umask = os.umask(0)
+        os.umask(umask)
+        return 0o666 & ~umask
+
+
 def save(path, data):
     """Write data to path atomically: a temp file in the same directory, then os.replace.
 
@@ -62,8 +73,10 @@ def save(path, data):
     """
     target = os.path.realpath(path)
     directory = os.path.dirname(target)
+    mode = _file_mode(target)
     fd, tmp = tempfile.mkstemp(prefix=".todo-", suffix=".tmp", dir=directory)
     try:
+        os.chmod(tmp, mode)
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             json.dump(data, f)
             f.write("\n")
