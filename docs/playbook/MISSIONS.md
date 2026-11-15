@@ -51,7 +51,8 @@ Owned by the lead. Only `room.py` edits the block above (`state set`, `state nex
 
 | Task | Branch | Attempt | Status |
 | --- | --- | --- | --- |
-| M1-A | builder (foreground) | 1 | running |
+| M1-A | worktree-agent-a8a69e04a7a6ab938 | 1 | merged 4b3489d |
+| M1-B | builder (foreground) | 1 | running |
 
 ### Parked questions
 
