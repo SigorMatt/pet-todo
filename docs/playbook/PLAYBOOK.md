@@ -2,9 +2,11 @@
 
 pipeline: main
 repo: SigorMatt/pet-todo
-room: 1
-watchdog: trig_015BK2xs9kdQi1WbujNLmHR3
+room: 5
+watchdog: trig_01GqT8CNMzZjLFuGEWeSaoTU
+lead-task: trig_01NmgWKaWHkvvJatfDvxVdoZ
 test: python3 -m unittest discover -s tests -t .
+drill: stop-after-merge
 
 Owned by the architect; the lead reads it and acts on it. Every item has testable acceptance criteria that a cloud machine can check (4 CPUs, 16 GB, no GPU, internet only through the allowlist). Anything else is marked as a manual check for Matthew.
 
@@ -13,6 +15,10 @@ Owned by the architect; the lead reads it and acts on it. Every item has testabl
 ### Phase 1: Core to-do CLI
 
 Goal: a working `python3 -m todo` with add, list, done, remove and due dates, as in DESIGN.md. Items: P1-1, P1-2, P1-3. Mission budget: 3 hours.
+
+### Phase 2: Hardening and edit
+
+Goal: settle phase 1's deferred edge cases and add `edit`, as in DESIGN.md (D-2 to D-4). Items: P2-1, P2-2, P2-3, P2-4. Mission budget: 2 hours.
 
 ## Items with criteria
 
@@ -35,6 +41,27 @@ Goal: a working `python3 -m todo` with add, list, done, remove and due dates, as
 - [ ] `list --overdue` shows only open items due before today, with today injectable for the test (unittest)
 - [ ] A bad date prints `todo: bad date <value>` and exits 1 (unittest)
 
+### P2-1: Safe concurrent runs (D-4)
+
+- [ ] Two processes that each run `add` 50 times at the same time leave 100 items with 100 distinct IDs (unittest with subprocesses and one `TODO_FILE`)
+- [ ] `add`, `done`, `remove` and `edit` hold an exclusive lock on `<file>.lock` from before loading until after the rename, and release it on every exit path, errors included (unittest)
+- [ ] The behaviour while another run holds the lock follows the answer to Q-1 in DESIGN.md (unittest, once decided)
+
+### P2-2: Clean task text (D-2)
+
+- [ ] `add` with text that is empty or whitespace, contains a newline, carriage return, tab or another control character, or isn't valid UTF-8 prints `todo: bad text`, exits 1 and leaves the file unchanged (unittest for each case)
+- [ ] `list` prints exactly one line per item for every text `add` accepts (unittest)
+
+### P2-3: Strict IDs (D-3)
+
+- [ ] `done`, `remove` and `edit` with an ID like `01`, `-1`, `1.0`, `abc` or 5000 digits print `todo: bad id <value>` (value cut to 20 characters), exit 1 and leave the file unchanged (unittest)
+- [ ] When the next ID would pass 9223372036854775807, `add` prints `todo: no more ids`, exits 1 and leaves the file unchanged (unittest with a prepared file)
+
+### P2-4: Edit
+
+- [ ] `edit ID TEXT` replaces the text and prints `edited <id>`; done state, due date and ID stay (unittest)
+- [ ] `edit` with an unknown ID prints `todo: no item <id>`; bad text and bad IDs fail as in P2-2 and P2-3 (unittest)
+
 ## Merge-hold list
 
 A PR touching any of these areas is held for Matthew (`MERGE-HOLD-n`). Edit the patterns per project: `*` stays within one path segment, `**/` matches any number of directories, including none, and matching ignores case. Holding too much is cheaper than missing a change.
@@ -55,6 +82,7 @@ A PR touching any of these areas is held for Matthew (`MERGE-HOLD-n`). Edit the 
 
 - Internal naming, module layout inside `todo/`, test layout and helper functions.
 - How "today" is injected into `list --overdue` for tests (an environment variable or a parameter).
+- The lock file's open mode and the test harness for concurrent runs. Not Q-1: that is Matthew's.
 
 ## Phase 0 known debt
 

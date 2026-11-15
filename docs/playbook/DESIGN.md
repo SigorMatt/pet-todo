@@ -31,8 +31,15 @@ Tests live in `tests/` and use `unittest`, each test with its own temporary `TOD
 | `list [--all] [--overdue]` | Open items by ID; `--all` includes done ones; `--overdue` shows only open items whose due date is before today | one line per item: `<id> [ ] <text>` or `<id> [x] <text>`, plus ` (due YYYY-MM-DD)` when set; nothing for an empty list |
 | `done ID` | Marks the item done; doing it twice is not an error | `done <id>` |
 | `remove ID` | Deletes the item | `removed <id>` |
+| `edit ID TEXT` | Replaces the item's text (phase 2) | `edited <id>` |
 
 An unknown ID prints `todo: no item <id>` and exits 1. A bad date prints `todo: bad date <value>` and exits 1.
+
+Phase 2 adds these errors, each exiting 1 and leaving the file unchanged:
+
+- `todo: bad text`: the text is empty or only whitespace, contains a control character (Unicode category Cc, which includes newline, carriage return and tab), or isn't valid UTF-8 (D-2).
+- `todo: bad id <value>`: an ID argument that isn't 1 to 19 decimal digits without a leading zero (D-3). `<value>` is cut to its first 20 characters.
+- `todo: no more ids`: `add` when the next ID would pass 9223372036854775807 (D-3).
 
 ## Data
 
@@ -42,7 +49,7 @@ A JSON file at `$TODO_FILE`, else `./todo.json`, created on the first write:
 {"next_id": 3, "items": [{"id": 1, "text": "buy milk", "done": false, "due": "2026-11-20"}]}
 ```
 
-`due` is absent or an ISO date string. Writes replace the file atomically: write a temporary file in the same directory, then rename it. A missing file reads as an empty list. A file that isn't valid JSON prints `todo: cannot read <path>` and exits 1.
+`due` is absent or an ISO date string. Writes replace the file atomically: write a temporary file in the same directory, then rename it. Every command that changes the file holds an exclusive lock on `<file>.lock` (`fcntl.flock`) from before it loads the file until after the rename (D-4). A missing file reads as an empty list. A file that isn't valid JSON prints `todo: cannot read <path>` and exits 1.
 
 ## Decision log
 
@@ -52,3 +59,25 @@ A JSON file at `$TODO_FILE`, else `./todo.json`, created on the first write:
 - **Decision:** `todo` uses only the Python standard library, and `unittest` for tests.
 - **Rationale:** keeps the rehearsal free of dependency holds and environment needs.
 - **Rejected alternatives:** `click` and `pytest`: nicer, but each is a new dependency the merge gate would hold.
+
+### D-2: Clean task text
+
+- **Date:** 2026-11-16
+- **Decision:** `add` and `edit` reject text that is empty or only whitespace, contains any control character (Unicode category Cc), or isn't valid UTF-8, with `todo: bad text`. Text is stored as given otherwise.
+- **Rationale:** one line per item in `list` (ledger L-4), and no crash on undecodable input (L-3).
+- **Rejected alternatives:** escaping control characters (changes what the user typed); replacing bad bytes (silently alters the text).
+
+### D-3: Strict IDs
+
+- **Date:** 2026-11-16
+- **Decision:** an ID argument is 1 to 19 decimal digits with no leading zero, else `todo: bad id <value>`. `add` refuses with `todo: no more ids` when the next ID would pass 9223372036854775807.
+- **Rationale:** settles zero-padded and huge IDs (L-5) and gives ID exhaustion its own message (L-6).
+- **Rejected alternatives:** accepting zero-padded IDs (two spellings of one ID).
+
+### D-4: Lock around every change
+
+- **Date:** 2026-11-16
+- **Decision:** commands that change the file take an exclusive `fcntl.flock` on `<file>.lock` around load, change and save, so concurrent runs never lose an item or reuse an ID (L-1). POSIX only, like the rest of the rehearsal. `list` takes no lock.
+- **Rationale:** the simplest correct fix with the standard library.
+- **Rejected alternatives:** retry on a version number (more code, same guarantee).
+- **Open question Q-1:** what a command does when another run holds the lock: wait without limit, or wait a while and then fail with which message and exit code. Not decided, and not the lead's discretion: the lead escalates it before building that behaviour.
