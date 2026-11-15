@@ -24,7 +24,7 @@ Owned by the lead. Only `room.py` edits the block above (`state set`, `state nex
 | --- | --- | --- | --- | --- |
 | M1 | `mission/M1-store-add-list` | merged | #2 (12d2b13) | P1-1 (also makes `main` green) |
 | M2 | `mission/M2-done-remove` | merged | #3 (9ffe9a1) | P1-2 |
-| M3 | `mission/M3-due-overdue` | planned | | P1-3 |
+| M3 | `mission/M3-due-overdue` | in progress | | P1-3 |
 
 ## Lead decisions
 
@@ -38,7 +38,17 @@ Owned by the lead. Only `room.py` edits the block above (`state set`, `state nex
 
 ## Current mission
 
-- none (M2 merged as 9ffe9a1; M3 next)
+- **Mission:** M3, `mission/M3-due-overdue`.
+- **Scope:** Add due dates to items: `add TEXT --due YYYY-MM-DD` stores an ISO date, and `list` shows ` (due YYYY-MM-DD)` after the text. Add `list --overdue`, which shows only open items whose due date is before today, with today injected through a `today` parameter of `cli.main` (Lead decisions). A bad date prints `todo: bad date <value>` and exits 1. `store.py` accepts and keeps the optional `due` field (absent or an ISO date string, per DESIGN Data).
+- **Criteria:**
+  - P1-3 a: `add TEXT --due YYYY-MM-DD` stores the date and `list` shows ` (due YYYY-MM-DD)`: unittest in `tests/test_cli.py` checking stdout and the stored JSON.
+  - P1-3 b: `list --overdue` shows only open items due before today, today injected: unittest with a fixed `today` covering past, today, future, no-due and done items.
+  - P1-3 c: a bad date prints `todo: bad date <value>` and exits 1: unittest with malformed and impossible dates (e.g. `2026-13-01`, `2026-02-30`, `tomorrow`), file unchanged.
+- **Ledger items:** none target M3.
+- **Spec revision:** a34dc4ab73772a41d5d39925752ec7bc54a47668, pipeline `main`.
+- **Tasks:**
+  - **M3-A** due dates on add and list, bad date. Files: `todo/cli.py`, `todo/store.py`, `tests/test_cli.py`, `tests/test_store.py`. Done when: P1-3 a and c tests pass with the suite.
+  - **M3-B** `list --overdue` with injected today. Files: `todo/cli.py`, `tests/test_cli.py`. Done when: P1-3 b tests pass with the suite. Runs after M3-A is merged (same files).
 
 ### Tasks in flight
 
