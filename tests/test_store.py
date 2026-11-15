@@ -71,6 +71,30 @@ class StoreTest(unittest.TestCase):
         self.assertEqual(store.load(self.path), data)
         self.assertEqual(os.listdir(self.dir), ["todo.json"])
 
+    @unittest.skipUnless(hasattr(os, "symlink"), "needs symlinks")
+    def test_save_through_symlink_updates_target(self):
+        real = os.path.join(self.dir, "real.json")
+        store.save(real, {"next_id": 1, "items": []})
+        os.symlink("real.json", self.path)
+        data = {"next_id": 2, "items": [{"id": 1, "text": "x", "done": False}]}
+        store.save(self.path, data)
+        self.assertTrue(os.path.islink(self.path))
+        self.assertEqual(os.readlink(self.path), "real.json")
+        with open(real, encoding="utf-8") as f:
+            self.assertEqual(json.load(f), data)
+        self.assertEqual(sorted(os.listdir(self.dir)), ["real.json", "todo.json"])
+
+    @unittest.skipUnless(hasattr(os, "symlink"), "needs symlinks")
+    def test_save_through_dangling_symlink_creates_target(self):
+        sub = os.path.join(self.dir, "sub")
+        os.mkdir(sub)
+        os.symlink(os.path.join(sub, "real.json"), self.path)
+        data = {"next_id": 1, "items": []}
+        store.save(self.path, data)
+        self.assertTrue(os.path.islink(self.path))
+        self.assertEqual(os.listdir(sub), ["real.json"])
+        self.assertEqual(store.load(self.path), data)
+
     def _assert_failed_write_keeps_original(self, target):
         original = {"next_id": 2, "items": [{"id": 1, "text": "old", "done": False}]}
         store.save(self.path, original)

@@ -56,14 +56,18 @@ def _valid(data):
 
 
 def save(path, data):
-    """Write data to path atomically: a temp file in the same directory, then os.replace."""
-    directory = os.path.dirname(os.path.abspath(path))
+    """Write data to path atomically: a temp file in the same directory, then os.replace.
+
+    A symlinked path is resolved first, so the link stays and its target is replaced.
+    """
+    target = os.path.realpath(path)
+    directory = os.path.dirname(target)
     fd, tmp = tempfile.mkstemp(prefix=".todo-", suffix=".tmp", dir=directory)
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             json.dump(data, f)
             f.write("\n")
-        os.replace(tmp, path)
+        os.replace(tmp, target)
     except BaseException:
         try:
             os.unlink(tmp)
