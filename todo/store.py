@@ -54,10 +54,15 @@ def _is_id(value):
     return _is_int(value) and value <= MAX_ID
 
 
+def _is_item_id(value):
+    """True for an int from 1 to MAX_ID: an ID done and remove can reach."""
+    return _is_id(value) and value >= 1
+
+
 def _valid_item(item):
     return (
         isinstance(item, dict)
-        and _is_id(item.get("id"))
+        and _is_item_id(item.get("id"))
         and isinstance(item.get("text"), str)
         and isinstance(item.get("done"), bool)
     )

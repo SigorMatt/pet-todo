@@ -154,12 +154,20 @@ class StoreTest(unittest.TestCase):
                 self._write({"next_id": next_id, "items": []})
                 self.assertEqual(store.load(self.path)["next_id"], 1)
 
-    def test_negative_stored_ids_still_give_next_id_of_at_least_one(self):
-        item = {"id": -3, "text": "a", "done": False}
-        for next_id in (-4, 0, 1):
-            with self.subTest(next_id=next_id):
-                self._write({"next_id": next_id, "items": [item]})
-                self.assertEqual(store.load(self.path)["next_id"], max(next_id, 1))
+    def test_item_ids_below_one_raise_store_error(self):
+        item = {"id": 2, "text": "a", "done": False}
+        for bad_id in (0, -1, -3):
+            for next_id in (-4, 0, 1, 5):
+                with self.subTest(id=bad_id, next_id=next_id):
+                    self._write({"next_id": next_id,
+                                 "items": [item, dict(item, id=bad_id)]})
+                    with self.assertRaises(store.StoreError) as cm:
+                        store.load(self.path)
+                    self.assertEqual(cm.exception.path, self.path)
+
+    def test_item_id_one_is_allowed(self):
+        self._write({"next_id": 0, "items": [{"id": 1, "text": "a", "done": False}]})
+        self.assertEqual(store.load(self.path)["next_id"], 2)
 
     def test_higher_next_id_is_kept(self):
         data = {"next_id": 9, "items": [{"id": 3, "text": "x", "done": False}]}
