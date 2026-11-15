@@ -22,7 +22,15 @@ Owned by the lead. Only `room.py` edits the block above (`state set`, `state nex
 
 | Mission | Branch | Status | PR | Criteria |
 | --- | --- | --- | --- | --- |
-| M1 | `mission/M1-<slug>` | planned | | P1-1 |
+| M1 | `mission/M1-store-add-list` | planned | | P1-1 (also makes `main` green) |
+| M2 | `mission/M2-done-remove` | planned | | P1-2 |
+| M3 | `mission/M3-due-overdue` | planned | | P1-3 |
+
+## Lead decisions
+
+- Phase 1 plan: the template's placeholder M1 row was replaced, so missions are M1–M3 (planner's draft numbered them M2–M4).
+- `list --all --overdue` behaves like `list --overdue` (DESIGN: overdue shows only open items).
+- Today for `list --overdue` is injected through a `today` parameter of `cli.main` (playbook: lead's discretion).
 
 ## Current mission
 
