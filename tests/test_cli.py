@@ -697,5 +697,177 @@ class TextSubprocessTest(CliTestCase):
         self.assertEqual(r.stdout.decode("utf-8"), expected)
 
 
+class EditTest(CliTestCase):
+    """P2-4: edit ID TEXT replaces the text and keeps ID, done state and due date."""
+
+    def setUp(self):
+        super().setUp()
+        self.run_cli("add", "buy milk", "--due", "2026-11-20")
+        self.run_cli("add", "walk dog")
+        self.run_cli("add", "file taxes", "--due", "2026-04-15")
+        self.run_cli("done", "3")
+        with open(self.path, "rb") as f:
+            self.before = f.read()
+
+    def items(self):
+        with open(self.path, encoding="utf-8") as f:
+            return json.load(f)
+
+    def assert_unchanged(self):
+        with open(self.path, "rb") as f:
+            self.assertEqual(f.read(), self.before)
+
+    def test_edit_replaces_text_and_keeps_id_done_and_due(self):
+        self.assertEqual(self.run_cli("edit", "1", "buy oat milk"), (0, "edited 1\n", ""))
+        data = self.items()
+        self.assertEqual(data["next_id"], 4)
+        self.assertEqual(data["items"], [
+            {"id": 1, "text": "buy oat milk", "done": False, "due": "2026-11-20"},
+            {"id": 2, "text": "walk dog", "done": False},
+            {"id": 3, "text": "file taxes", "done": True, "due": "2026-04-15"},
+        ])
+        self.assertEqual(self.run_cli("list", "--all"), (0,
+            "1 [ ] buy oat milk (due 2026-11-20)\n2 [ ] walk dog\n"
+            "3 [x] file taxes (due 2026-04-15)\n", ""))
+
+    def test_edit_open_item_without_due(self):
+        self.assertEqual(self.run_cli("edit", "2", "walk cat"), (0, "edited 2\n", ""))
+        self.assertEqual(self.items()["items"][1],
+                         {"id": 2, "text": "walk cat", "done": False})
+
+    def test_edit_accepted_texts(self):
+        for text in ACCEPTED_TEXTS:
+            with self.subTest(text=text):
+                self.assertEqual(self.run_cli("edit", "2", text), (0, "edited 2\n", ""))
+                self.assertEqual(self.items()["items"][1]["text"], text)
+
+    def test_dash_text_after_double_dash(self):
+        self.assertEqual(self.run_cli("edit", "2", "--", "-x"), (0, "edited 2\n", ""))
+        self.assertEqual(self.items()["items"][1]["text"], "-x")
+        self.assertEqual(self.run_cli("edit", "--", "2", "--all"), (0, "edited 2\n", ""))
+        self.assertEqual(self.items()["items"][1]["text"], "--all")
+
+    def test_dash_text_without_double_dash_is_a_usage_error(self):
+        for text in ("-x", "--all", "--due"):
+            with self.subTest(text=text):
+                code, out, err = self.run_cli("edit", "2", text)
+                self.assertEqual((code, out), (1, ""))
+                self.assertTrue(err.startswith("todo: "), err)
+                self.assert_unchanged()
+
+    def test_usage_errors(self):
+        for argv in (["edit"], ["edit", "1"], ["edit", "1", "a", "b"]):
+            with self.subTest(argv=argv):
+                code, out, err = self.run_cli(*argv)
+                self.assertEqual((code, out), (1, ""))
+                self.assertTrue(err.startswith("todo: "), err)
+                self.assert_unchanged()
+
+    def test_unknown_id_is_no_item(self):
+        for raw in ("4", "9" * 19, str(store.MAX_ID)):
+            with self.subTest(raw=raw):
+                self.assertEqual(self.run_cli("edit", raw, "x"),
+                                 (1, "", "todo: no item {}\n".format(raw)))
+                self.assert_unchanged()
+
+    def test_done_item_is_refused(self):
+        """D-6: a done item can't be edited; the file stays byte-identical."""
+        self.assertEqual(self.run_cli("edit", "3", "file taxes early"),
+                         (1, "", "todo: item 3 is done\n"))
+        self.assert_unchanged()
+
+    def test_done_check_comes_after_id_and_text_checks(self):
+        self.assertEqual(self.run_cli("edit", "03", "x"), (1, "", "todo: bad id 03\n"))
+        self.assertEqual(self.run_cli("edit", "3", ""), (1, "", "todo: bad text\n"))
+        self.assert_unchanged()
+
+    def test_removed_id_is_no_item(self):
+        self.run_cli("remove", "2")
+        self.assertEqual(self.run_cli("edit", "2", "x"), (1, "", "todo: no item 2\n"))
+
+    def test_unknown_id_on_missing_file(self):
+        os.remove(self.path)
+        self.assertEqual(self.run_cli("edit", "1", "x"), (1, "", "todo: no item 1\n"))
+        self.assertFalse(os.path.exists(self.path))
+
+    def test_bad_text(self):
+        for text in ("", "   ", "a\nb", "a\rb", "a\tb", "a\x00b", "a\x7fb", "a\x85b",
+                     b"a \xff b".decode("utf-8", "surrogateescape")):
+            with self.subTest(text=text):
+                self.assertEqual(self.run_cli("edit", "1", text),
+                                 (1, "", "todo: bad text\n"))
+                self.assert_unchanged()
+
+    def test_bad_ids(self):
+        for raw in ("01", "0", "", "-1", "1.0", "abc", "1" * 20, "1" * 5000,
+                    "-x", "-h", "--help", "-", "\u0661"):
+            with self.subTest(raw=raw):
+                self.assertEqual(self.run_cli("edit", raw, "x"),
+                                 (1, "", "todo: bad id {}\n".format(raw[:20])))
+                self.assert_unchanged()
+
+    def test_dash_id_with_double_dash_text_is_bad_id(self):
+        self.assertEqual(self.run_cli("edit", "-x", "--", "-y"),
+                         (1, "", "todo: bad id -x\n"))
+        self.assert_unchanged()
+
+    def test_bad_id_wins_over_bad_text(self):
+        for raw in ("01", "abc", "-1", "-h"):
+            with self.subTest(raw=raw):
+                self.assertEqual(self.run_cli("edit", raw, ""),
+                                 (1, "", "todo: bad id {}\n".format(raw)))
+                self.assert_unchanged()
+
+    def test_checks_run_before_file_is_loaded(self):
+        self.write("not json")
+        self.assertEqual(self.run_cli("edit", "01", "x"), (1, "", "todo: bad id 01\n"))
+        self.assertEqual(self.run_cli("edit", "1", "a\nb"), (1, "", "todo: bad text\n"))
+        self.assertEqual(self.run_cli("edit", "1", "x"),
+                         (1, "", "todo: cannot read {}\n".format(self.path)))
+        os.remove(self.path)
+        self.assertEqual(self.run_cli("edit", "abc", "x"), (1, "", "todo: bad id abc\n"))
+        self.assertEqual(self.run_cli("edit", "1", ""), (1, "", "todo: bad text\n"))
+        self.assertFalse(os.path.exists(self.path))
+
+    def test_cannot_write(self):
+        with mock.patch.object(store, "save", side_effect=OSError("disk full")):
+            self.assertEqual(self.run_cli("edit", "1", "x"),
+                             (1, "", "todo: cannot write {}\n".format(self.path)))
+        self.assert_unchanged()
+
+
+class EditSubprocessTest(CliTestCase):
+    """edit end to end through python3 -m todo, including non-UTF-8 argv."""
+
+    def run_module(self, *argv):
+        env = dict(os.environ, TODO_FILE=self.path,
+                   PYTHONIOENCODING="utf-8:strict", LC_ALL="C.UTF-8")
+        return subprocess.run(
+            [sys.executable, "-m", "todo"] + list(argv),
+            cwd=ROOT, env=env, capture_output=True, timeout=30,
+        )
+
+    def test_edit_end_to_end(self):
+        self.run_module("add", "buy milk", "--due", "2026-11-20")
+        r = self.run_module("edit", "1", "buy oat milk")
+        self.assertEqual((r.returncode, r.stdout, r.stderr), (0, b"edited 1\n", b""))
+        r = self.run_module("list")
+        self.assertEqual(r.stdout, b"1 [ ] buy oat milk (due 2026-11-20)\n")
+        r = self.run_module("edit", "2", "x")
+        self.assertEqual((r.returncode, r.stdout, r.stderr), (1, b"", b"todo: no item 2\n"))
+
+    def test_non_utf8_argv_is_bad_text(self):
+        self.run_module("add", "buy milk")
+        with open(self.path, "rb") as f:
+            before = f.read()
+        for raw in (b"buy \xff\xfe milk", b"\xc3\x28"):
+            with self.subTest(raw=raw):
+                r = self.run_module(b"edit", b"1", raw)
+                self.assertEqual((r.returncode, r.stdout, r.stderr),
+                                 (1, b"", b"todo: bad text\n"))
+                with open(self.path, "rb") as f:
+                    self.assertEqual(f.read(), before)
+
+
 if __name__ == "__main__":
     unittest.main()
