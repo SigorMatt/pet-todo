@@ -30,7 +30,7 @@ Owned by the lead. Only `room.py` edits the block above (`state set`, `state nex
 
 | Mission | Branch | Status | PR | Criteria |
 | --- | --- | --- | --- | --- |
-| M4 | `mission/M4-text-and-ids` | planned | | P2-2, P2-3 (ledger L-3, L-4, L-5, L-6) |
+| M4 | `mission/M4-text-and-ids` | in progress | | P2-2, P2-3 (ledger L-3, L-4, L-5, L-6) |
 | M5 | `mission/M5-edit` | planned | | P2-4 |
 | M6 | `mission/M6-lock` | planned | | P2-1 (ledger L-1; c3 waits on Q-1) |
 
@@ -54,7 +54,14 @@ Owned by the lead. Only `room.py` edits the block above (`state set`, `state nex
 
 ## Current mission
 
-None.
+- **Mission:** M4, `mission/M4-text-and-ids`.
+- **Scope:** `add` rejects bad text per D-2 with `todo: bad text`; `done` and `remove` reject malformed IDs per D-3 with `todo: bad id <value[:20]>`; `add` past MAX_ID prints `todo: no more ids`. All three exit 1 and leave the file unchanged. The text and ID checks are shared helpers in `todo/cli.py` so M5's `edit` can reuse them.
+- **Criteria:** P2-2 c1 (unittest per bad-text case, file unchanged); P2-2 c2 (unittest: `list` one line per accepted text, plus strict-UTF-8 stdout subprocess); P2-3 c1 for `done`/`remove` (unittests for `01`, `-1`, `1.0`, `abc`, 5000 digits; `edit`'s share in M5); P2-3 c2 (unittest with a prepared file at MAX_ID).
+- **Ledger items:** L-3, L-4, L-5, L-6 (all targeted `phase 2 backlog`, placed here).
+- **Spec revision:** d7e84b85dccdedcbe662ae5a538a211673415a77, pipeline main.
+- **Tasks:**
+  - T1+T2 (text, one builder): D-2 check on `add` before load (empty/whitespace, any Cc, non-UTF-8 argv i.e. surrogate escapes); tests per case incl. a subprocess with non-UTF-8 argv bytes; `list` one-line-per-item test for accepted texts and a strict-UTF-8 stdout run. Files: `todo/cli.py`, `tests/test_cli.py`. Done when: `<test>` green with those tests.
+  - T3+T4 (IDs, one builder): D-3 ID check on `done`/`remove` before load; update phase 1 tests that now expect `bad id`; `add` past MAX_ID gives `todo: no more ids` (replacing the `cannot write` test), `cannot write` kept for OS errors. Files: `todo/cli.py`, `tests/test_cli.py`. Done when: `<test>` green with those tests.
 
 ### Tasks in flight
 
