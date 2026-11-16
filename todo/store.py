@@ -39,8 +39,12 @@ LOCK_INTERVAL = 0.05
 
 
 def lock_path(path):
-    """The lock file for the data file at path: the path plus ``.lock`` (D-4)."""
-    return path + ".lock"
+    """The lock file for the data file at path: its resolved path plus ``.lock`` (D-4).
+
+    Symlinks are resolved as save resolves them, so every name for one data
+    file takes the same lock, and the lock file sits beside the file written.
+    """
+    return os.path.realpath(path) + ".lock"
 
 
 class FileLock:

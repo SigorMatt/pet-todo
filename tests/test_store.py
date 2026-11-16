@@ -407,6 +407,30 @@ class LockTest(unittest.TestCase):
             self.assertGreaterEqual(time.monotonic() - start, 0.15)
             self.assertFalse(self._try_flock())
 
+    @unittest.skipUnless(hasattr(os, "symlink"), "needs symlinks")
+    def test_lock_path_resolves_symlinks(self):
+        directory = os.path.dirname(self.path)
+        os.mkdir(os.path.join(directory, "sub"))
+        link = os.path.join(directory, "sub", "link.json")
+        os.symlink(self.path, link)
+        real = os.path.realpath(self.path)
+        self.assertEqual(store.lock_path(link), real + ".lock")
+        self.assertEqual(store.lock_path(self.path), real + ".lock")
+
+    @unittest.skipUnless(hasattr(os, "symlink"), "needs symlinks")
+    def test_symlink_and_target_take_the_same_lock(self):
+        link = os.path.join(os.path.dirname(self.path), "link.json")
+        os.symlink("todo.json", link)
+        with store.lock(link):
+            with self.assertRaises(store.LockedError) as cm:
+                store.lock(self.path, timeout=0.1, interval=0.01)
+            self.assertEqual(cm.exception.path, self.path)
+        self._hold()
+        with self.assertRaises(store.LockedError) as cm:
+            store.lock(link, timeout=0.1, interval=0.01)
+        self.assertEqual(cm.exception.path, link)
+        self.assertFalse(os.path.exists(link + ".lock"))
+
     def test_unopenable_lock_file_raises_oserror(self):
         path = os.path.join(os.path.dirname(self.path), "no", "t.json")
         with self.assertRaises(OSError):

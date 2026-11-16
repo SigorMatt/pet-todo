@@ -1083,6 +1083,44 @@ class LockTest(CliTestCase):
         holder.stdout.close()
         self.assertEqual(self.run_cli("add", "x"), (0, "added 3\n", ""))
 
+    # Cold M6 R1-1, R1-2: the lock is keyed on the resolved data file.
+
+    def link_to_data_file(self, directory):
+        """A symlink to the data file at path, in a new subdirectory of the test's directory."""
+        sub = os.path.join(os.path.dirname(self.path), directory)
+        os.mkdir(sub)
+        link = os.path.join(sub, "link.json")
+        os.symlink(self.path, link)
+        return link
+
+    @unittest.skipUnless(hasattr(os, "symlink"), "needs symlinks")
+    def test_symlink_and_target_take_the_same_lock(self):
+        link = self.link_to_data_file("links")
+        self.hold()
+        self.short_timeout()
+        with mock.patch.dict(os.environ, {"TODO_FILE": link}):
+            for argv in self.CHANGES:
+                with self.subTest(argv=argv):
+                    self.assertEqual(self.run_cli(*argv),
+                                     (1, "", "todo: file is locked {}\n".format(link)))
+                    self.assertEqual(self.read(), self.ITEMS)
+
+    @unittest.skipUnless(hasattr(os, "symlink"), "needs symlinks")
+    def test_symlink_saves_when_no_lock_file_can_sit_beside_it(self):
+        # The link's directory cannot hold link.json.lock (here a directory is in
+        # the way, as a read-only directory would be); the target's can.
+        link = self.link_to_data_file("links")
+        os.mkdir(link + ".lock")
+        with mock.patch.dict(os.environ, {"TODO_FILE": link}):
+            for argv in self.CHANGES:
+                with self.subTest(argv=argv):
+                    self.write(self.ITEMS)
+                    code, out, err = self.run_cli(*argv)
+                    self.assertEqual((code, err), (0, ""))
+                    self.assertNotEqual(self.read(), self.ITEMS)
+                    self.assertTrue(os.path.islink(link))
+        self.assertTrue(os.path.isfile(self.lock_path))
+
 
 if __name__ == "__main__":
     unittest.main()
