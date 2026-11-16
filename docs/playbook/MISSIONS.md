@@ -9,7 +9,7 @@ mission: M3
 step: spec
 pr: merged:4
 cursor: none
-counter: 0
+counter: 1
 intent: none
 waiting_for_owner: no
 status: running
