@@ -32,7 +32,7 @@ Owned by the lead. Only `room.py` edits the block above (`state set`, `state nex
 | --- | --- | --- | --- | --- |
 | M4 | `mission/M4-text-and-ids` | merged | #6 (afaabb6) | P2-2, P2-3 (ledger L-3, L-4, L-5, L-6) |
 | M5 | `mission/M5-edit` | merged | #7 (fe04c70) | P2-4 (with CHANGE-1, D-6) |
-| M6 | `mission/M6-lock` | planned | | P2-1 (ledger L-1; c3 waits on Q-1) |
+| M6 | `mission/M6-lock` | in progress | | P2-1 (ledger L-1; c3 settled by D-5) |
 
 ## Lead decisions
 
@@ -55,7 +55,17 @@ Owned by the lead. Only `room.py` edits the block above (`state set`, `state nex
 
 ## Current mission
 
-- none
+- **Mission:** M6, `mission/M6-lock`.
+- **Scope:** Every command that changes the file (`add`, `done`, `remove`, `edit`) takes an exclusive `fcntl.flock` on `<file>.lock` from before loading until after the atomic rename, and releases it on every exit path (D-4). Acquisition polls `LOCK_EX | LOCK_NB` for up to 5 seconds, then prints `todo: file is locked <path>` (the data file path) and exits 1 with the file unchanged (D-5). `list` takes no lock. Argument checks still run before the lock.
+- **Criteria:**
+  - P2-1 c1: unittest runs two subprocesses that each `add` 50 times against one `TODO_FILE`; the file then holds 100 items with 100 distinct IDs.
+  - P2-1 c2: unittests show the lock is held across load and rename for `add`, `done`, `remove`, `edit`, and released after success and after errors (no item, item is done, cannot write).
+  - P2-1 c3: unittests with an injectable wait: a lock held past the timeout gives `todo: file is locked <path>`, exit 1, file unchanged; a lock released within the timeout is waited for and the command succeeds.
+- **Ledger items:** L-1 (targets phase 2 backlog; this mission fixes it).
+- **Spec revision:** b5e0959251057487342e9ade7f4ef375f32ead9f, pipeline main.
+- **Tasks:**
+  - **M6-T1: lock and wire it in.** Files: `todo/store.py`, `todo/cli.py`, `tests/test_store.py`, `tests/test_cli.py`. A lock context manager in `store.py` (timeout and poll interval injectable), used by `add`, `done`, `remove`, `edit` in `cli.py`. Done when: `python3 -m unittest discover -s tests -t .` passes, with new tests for c2 and c3.
+  - **M6-T2: concurrent-run test.** Files: `tests/test_concurrency.py`. Depends on M6-T1. Done when: the c1 test (2 subprocesses × 50 adds, one `TODO_FILE`, 100 items, 100 distinct IDs) passes, and the full `<test>` passes.
 
 ### Tasks in flight
 
