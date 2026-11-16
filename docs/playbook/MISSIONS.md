@@ -10,7 +10,7 @@ step: spec
 pr: merged:4
 cursor: none
 counter: 1
-intent: post ESCALATION-1 in room 5 after #6911801608
+intent: none
 waiting_for_owner: no
 status: running
 mission_started: 2026-11-15T18:19:07Z
