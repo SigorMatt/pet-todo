@@ -53,7 +53,7 @@ Owned by the lead. Only `room.py` edits the block above (`state set`, `state nex
 - `edit` check order: bad id, bad text, then load, then no item, then item is done (D-6 check after lookup).
 - Lock timeout and poll interval are injectable through `store.LOCK_TIMEOUT` / `store.LOCK_INTERVAL` (and `store.lock()` arguments), not a `cli.main` parameter (playbook: lead's discretion).
 - A lock file that can't be opened (missing or read-only directory) gives `todo: cannot write <path>` for every changing command, before the item lookup; so `done 9` in a read-only directory says `cannot write`, not `no item` (the change can't be made either way).
-- Lock path is `$TODO_FILE` + `.lock` literally (D-4 wording); the lock file stays on disk (lock file mode is lead's discretion).
+- Lock path is the resolved data file plus `.lock` (`realpath($TODO_FILE) + ".lock"`), so every name for one data file shares one lock (cold M6 R1-1, R1-2; supersedes the earlier literal-path choice). Messages still name the path as given. The lock file stays on disk (lock file mode is lead's discretion).
 
 ## Current mission
 
@@ -75,6 +75,7 @@ Owned by the lead. Only `room.py` edits the block above (`state set`, `state nex
 | --- | --- | --- | --- |
 | M6-T1 | builder a4fc1de31586d4703 (worktree) | 1 | merged (a3869be) |
 | M6-T2 | builder ab9d0b147964089bd (worktree) | 1 | merged (1f611b2) |
+| M6-F1 (cold R1-1, R1-2) | builder a88d74440d1287ae4 (worktree) | 1 | running |
 
 ### Parked questions
 
