@@ -51,6 +51,8 @@ Owned by the lead. Only `room.py` edits the block above (`state set`, `state nex
 - D-2 is applied as written: only category Cc is rejected, so U+2028/U+2029 are accepted.
 - Stored text that D-2 would reject (hand-edited files) is out of scope: P2-2 c2 covers only text `add` accepts.
 - `edit` check order: bad id, bad text, then load, then no item, then item is done (D-6 check after lookup).
+- Lock timeout and poll interval are injectable through `store.LOCK_TIMEOUT` / `store.LOCK_INTERVAL` (and `store.lock()` arguments), not a `cli.main` parameter (playbook: lead's discretion).
+- A lock file that can't be opened (missing or read-only directory) gives `todo: cannot write <path>` for every changing command, before the item lookup; so `done 9` in a read-only directory says `cannot write`, not `no item` (the change can't be made either way).
 - Lock path is `$TODO_FILE` + `.lock` literally (D-4 wording); the lock file stays on disk (lock file mode is lead's discretion).
 
 ## Current mission
@@ -71,7 +73,8 @@ Owned by the lead. Only `room.py` edits the block above (`state set`, `state nex
 
 | Task | Branch | Attempt | Status |
 | --- | --- | --- | --- |
-| M6-T1 | builder a4fc1de31586d4703 (worktree) | 1 | running |
+| M6-T1 | builder a4fc1de31586d4703 (worktree) | 1 | merged (a3869be) |
+| M6-T2 | builder (worktree) | 1 | running |
 
 ### Parked questions
 
