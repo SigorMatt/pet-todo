@@ -6,13 +6,13 @@ lease_generation: 8
 phase: 2
 room: 5
 mission: M6
-step: close
+step: done
 pr: merged:8
 cursor: 6920067803
 counter: 1
 intent: none
 waiting_for_owner: no
-status: running
+status: done
 mission_started: 2026-11-16T15:02:32Z
 ```
 
