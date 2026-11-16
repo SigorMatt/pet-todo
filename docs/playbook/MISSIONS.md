@@ -31,7 +31,7 @@ Owned by the lead. Only `room.py` edits the block above (`state set`, `state nex
 | Mission | Branch | Status | PR | Criteria |
 | --- | --- | --- | --- | --- |
 | M4 | `mission/M4-text-and-ids` | merged | #6 (afaabb6) | P2-2, P2-3 (ledger L-3, L-4, L-5, L-6) |
-| M5 | `mission/M5-edit` | planned | | P2-4 |
+| M5 | `mission/M5-edit` | in progress | | P2-4 |
 | M6 | `mission/M6-lock` | planned | | P2-1 (ledger L-1; c3 waits on Q-1) |
 
 ## Lead decisions
@@ -54,7 +54,15 @@ Owned by the lead. Only `room.py` edits the block above (`state set`, `state nex
 
 ## Current mission
 
-- none
+- **Mission:** M5, `mission/M5-edit`.
+- **Scope:** Add `edit ID TEXT` to the CLI (DESIGN Interfaces): replace an item's text and print `edited <id>`, keeping its ID, done state and due date. Reuse M4's text and ID checks so bad text gives `todo: bad text` and a bad ID gives `todo: bad id <value>`, both before the file is loaded; an unknown ID gives `todo: no item <id>`. No locking (M6).
+- **Criteria:**
+  - P2-4 c1: `edit ID TEXT` replaces the text, prints `edited <id>`, done/due/ID unchanged — unittest in `tests/test_cli.py`.
+  - P2-4 c2: unknown ID → `todo: no item <id>`; bad text and bad IDs fail as P2-2/P2-3 (exit 1, file unchanged) — unittests.
+- **Ledger items:** none target M5.
+- **Spec revision:** 1fadca536b8bc64f89d8d43646f333386c94aa1d, pipeline main.
+- **Tasks:**
+  - T1: `edit` subcommand in `todo/cli.py` (parser, `_cmd_edit`, ID/text guards like `done`/`remove`/`add`, dash-led TEXT as for `add`) plus unittests in `tests/test_cli.py` covering both criteria. Done when: `python3 -m unittest discover -s tests -t .` passes and `python3 -m todo edit` works end to end on a temp `TODO_FILE`.
 
 ### Tasks in flight
 
