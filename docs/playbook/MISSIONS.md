@@ -63,6 +63,8 @@ Owned by the lead. Only `room.py` edits the block above (`state set`, `state nex
   - T1+T2 (text, one builder): D-2 check on `add` before load (empty/whitespace, any Cc, non-UTF-8 argv i.e. surrogate escapes); tests per case incl. a subprocess with non-UTF-8 argv bytes; `list` one-line-per-item test for accepted texts and a strict-UTF-8 stdout run. Files: `todo/cli.py`, `tests/test_cli.py`. Done when: `<test>` green with those tests.
   - T3+T4 (IDs, one builder): D-3 ID check on `done`/`remove` before load; update phase 1 tests that now expect `bad id`; `add` past MAX_ID gives `todo: no more ids` (replacing the `cannot write` test), `cannot write` kept for OS errors. Files: `todo/cli.py`, `tests/test_cli.py`. Done when: `<test>` green with those tests.
 
+- **DECISION-1 (Q-1):** continue. Settled by D-5 at a9e1f8e; affects only M6 (P2-1 c3), whose spec will pin a9e1f8e or later. M4 keeps its spec revision.
+
 ### Tasks in flight
 
 | Task | Branch | Attempt | Status |
