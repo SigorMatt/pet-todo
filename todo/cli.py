@@ -45,6 +45,14 @@ class NoMoreIdsError(Exception):
         super().__init__("no more ids")
 
 
+class DoneItemError(Exception):
+    """The item with ID ``item_id`` is done, so edit refuses it (D-6)."""
+
+    def __init__(self, item_id):
+        self.item_id = item_id
+        super().__init__("item {} is done".format(item_id))
+
+
 class BadDateError(Exception):
     """``raw`` is not a real date in the form YYYY-MM-DD."""
 
@@ -197,6 +205,8 @@ def _cmd_edit(args, path):
     check_text(args.text)
     data = store.load(path)
     item = data["items"][_find(data, item_id)]
+    if item["done"]:
+        raise DoneItemError(item["id"])
     item["text"] = args.text
     _save(path, data)
     print("edited {}".format(item["id"]))
@@ -292,7 +302,7 @@ def main(argv=None, today=None):
     except store.StoreError as exc:
         print("todo: cannot read {}".format(exc.path), file=sys.stderr)
         return 1
-    except (WriteError, NoItemError, BadIdError, NoMoreIdsError, BadDateError, BadTextError) as exc:
+    except (WriteError, NoItemError, DoneItemError, BadIdError, NoMoreIdsError, BadDateError, BadTextError) as exc:
         print("todo: {}".format(exc), file=sys.stderr)
         return 1
     return 0

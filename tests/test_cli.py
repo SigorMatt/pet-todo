@@ -704,7 +704,8 @@ class EditTest(CliTestCase):
         super().setUp()
         self.run_cli("add", "buy milk", "--due", "2026-11-20")
         self.run_cli("add", "walk dog")
-        self.run_cli("done", "1")
+        self.run_cli("add", "file taxes", "--due", "2026-04-15")
+        self.run_cli("done", "3")
         with open(self.path, "rb") as f:
             self.before = f.read()
 
@@ -719,13 +720,15 @@ class EditTest(CliTestCase):
     def test_edit_replaces_text_and_keeps_id_done_and_due(self):
         self.assertEqual(self.run_cli("edit", "1", "buy oat milk"), (0, "edited 1\n", ""))
         data = self.items()
-        self.assertEqual(data["next_id"], 3)
+        self.assertEqual(data["next_id"], 4)
         self.assertEqual(data["items"], [
-            {"id": 1, "text": "buy oat milk", "done": True, "due": "2026-11-20"},
+            {"id": 1, "text": "buy oat milk", "done": False, "due": "2026-11-20"},
             {"id": 2, "text": "walk dog", "done": False},
+            {"id": 3, "text": "file taxes", "done": True, "due": "2026-04-15"},
         ])
         self.assertEqual(self.run_cli("list", "--all"), (0,
-            "1 [x] buy oat milk (due 2026-11-20)\n2 [ ] walk dog\n", ""))
+            "1 [ ] buy oat milk (due 2026-11-20)\n2 [ ] walk dog\n"
+            "3 [x] file taxes (due 2026-04-15)\n", ""))
 
     def test_edit_open_item_without_due(self):
         self.assertEqual(self.run_cli("edit", "2", "walk cat"), (0, "edited 2\n", ""))
@@ -761,11 +764,22 @@ class EditTest(CliTestCase):
                 self.assert_unchanged()
 
     def test_unknown_id_is_no_item(self):
-        for raw in ("3", "9" * 19, str(store.MAX_ID)):
+        for raw in ("4", "9" * 19, str(store.MAX_ID)):
             with self.subTest(raw=raw):
                 self.assertEqual(self.run_cli("edit", raw, "x"),
                                  (1, "", "todo: no item {}\n".format(raw)))
                 self.assert_unchanged()
+
+    def test_done_item_is_refused(self):
+        """D-6: a done item can't be edited; the file stays byte-identical."""
+        self.assertEqual(self.run_cli("edit", "3", "file taxes early"),
+                         (1, "", "todo: item 3 is done\n"))
+        self.assert_unchanged()
+
+    def test_done_check_comes_after_id_and_text_checks(self):
+        self.assertEqual(self.run_cli("edit", "03", "x"), (1, "", "todo: bad id 03\n"))
+        self.assertEqual(self.run_cli("edit", "3", ""), (1, "", "todo: bad text\n"))
+        self.assert_unchanged()
 
     def test_removed_id_is_no_item(self):
         self.run_cli("remove", "2")
