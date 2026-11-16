@@ -80,4 +80,11 @@ A JSON file at `$TODO_FILE`, else `./todo.json`, created on the first write:
 - **Decision:** commands that change the file take an exclusive `fcntl.flock` on `<file>.lock` around load, change and save, so concurrent runs never lose an item or reuse an ID (L-1). POSIX only, like the rest of the rehearsal. `list` takes no lock.
 - **Rationale:** the simplest correct fix with the standard library.
 - **Rejected alternatives:** retry on a version number (more code, same guarantee).
-- **Open question Q-1:** what a command does when another run holds the lock: wait without limit, or wait a while and then fail with which message and exit code. Not decided, and not the lead's discretion: the lead escalates it before building that behaviour.
+- **Q-1:** settled by D-5.
+
+### D-5: Waiting for a busy lock (answers Q-1)
+
+- **Date:** 2026-11-16
+- **Decision:** a command that changes the file polls `fcntl.flock(LOCK_EX | LOCK_NB)` for up to 5 seconds. If the lock is still held, it prints `todo: file is locked <path>`, exits 1 and leaves the file unchanged. `<path>` is the data file, not the lock file.
+- **Rationale:** never hangs on a stuck run, and 5 seconds covers ordinary contention such as P2-1's 2 × 50 concurrent adds (ESCALATION-1, option 2, the lead's recommendation).
+- **Rejected alternatives:** waiting without limit (a stuck run blocks every change silently); failing at once (concurrent adds would often fail).

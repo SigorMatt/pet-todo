@@ -45,7 +45,7 @@ Goal: settle phase 1's deferred edge cases and add `edit`, as in DESIGN.md (D-2 
 
 - [ ] Two processes that each run `add` 50 times at the same time leave 100 items with 100 distinct IDs (unittest with subprocesses and one `TODO_FILE`)
 - [ ] `add`, `done`, `remove` and `edit` hold an exclusive lock on `<file>.lock` from before loading until after the rename, and release it on every exit path, errors included (unittest)
-- [ ] The behaviour while another run holds the lock follows the answer to Q-1 in DESIGN.md (unittest, once decided)
+- [ ] While another run holds the lock for more than 5 seconds, a changing command prints `todo: file is locked <path>`, exits 1 and leaves the file unchanged; a lock released within 5 seconds is waited for (D-5; unittest with the wait injectable)
 
 ### P2-2: Clean task text (D-2)
 
@@ -82,7 +82,7 @@ A PR touching any of these areas is held for Matthew (`MERGE-HOLD-n`). Edit the 
 
 - Internal naming, module layout inside `todo/`, test layout and helper functions.
 - How "today" is injected into `list --overdue` for tests (an environment variable or a parameter).
-- The lock file's open mode and the test harness for concurrent runs. Not Q-1: that is Matthew's.
+- The lock file's open mode, the polling interval, and the test harness for concurrent runs.
 
 ## Phase 0 known debt
 
