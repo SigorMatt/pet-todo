@@ -6,11 +6,11 @@ lease_generation: 7
 phase: 2
 room: 5
 mission: M5
-step: PR
-pr: none
+step: Qodo first review
+pr: 7
 cursor: 6919602412
 counter: 1
-intent: open PR mission/M5-edit
+intent: none
 waiting_for_owner: no
 status: running
 mission_started: 2026-11-16T14:39:41Z
