@@ -7,10 +7,10 @@ phase: 2
 room: 5
 mission: M4
 step: gate
-pr: 6
+pr: merged:6
 cursor: 6911872424
 counter: 1
-intent: merge PR #6 at f70f3c6204d941030066757fde7b0f4adc7826a8
+intent: none
 waiting_for_owner: no
 status: running
 mission_started: 2026-11-16T08:52:44Z
