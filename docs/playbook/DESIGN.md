@@ -31,7 +31,7 @@ Tests live in `tests/` and use `unittest`, each test with its own temporary `TOD
 | `list [--all] [--overdue]` | Open items by ID; `--all` includes done ones; `--overdue` shows only open items whose due date is before today | one line per item: `<id> [ ] <text>` or `<id> [x] <text>`, plus ` (due YYYY-MM-DD)` when set; nothing for an empty list |
 | `done ID` | Marks the item done; doing it twice is not an error | `done <id>` |
 | `remove ID` | Deletes the item | `removed <id>` |
-| `edit ID TEXT` | Replaces the item's text (phase 2) | `edited <id>` |
+| `edit ID TEXT` | Replaces an open item's text (phase 2); a done item can't be edited (D-6) | `edited <id>` |
 
 An unknown ID prints `todo: no item <id>` and exits 1. A bad date prints `todo: bad date <value>` and exits 1.
 
@@ -88,3 +88,10 @@ A JSON file at `$TODO_FILE`, else `./todo.json`, created on the first write:
 - **Decision:** a command that changes the file polls `fcntl.flock(LOCK_EX | LOCK_NB)` for up to 5 seconds. If the lock is still held, it prints `todo: file is locked <path>`, exits 1 and leaves the file unchanged. `<path>` is the data file, not the lock file.
 - **Rationale:** never hangs on a stuck run, and 5 seconds covers ordinary contention such as P2-1's 2 × 50 concurrent adds (ESCALATION-1, option 2, the lead's recommendation).
 - **Rejected alternatives:** waiting without limit (a stuck run blocks every change silently); failing at once (concurrent adds would often fail).
+
+### D-6: Done items can't be edited
+
+- **Date:** 2026-11-16
+- **Decision:** `edit` on a done item prints `todo: item <id> is done`, exits 1 and leaves the file unchanged.
+- **Rationale:** a done item is a record of what was done; changing its text silently rewrites history.
+- **Rejected alternatives:** allowing it (simpler, but loses the record); reopening the item on edit (surprising).

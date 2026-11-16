@@ -60,6 +60,7 @@ Goal: settle phase 1's deferred edge cases and add `edit`, as in DESIGN.md (D-2 
 
 - [ ] `edit ID TEXT` replaces the text and prints `edited <id>`; done state, due date and ID stay (unittest)
 - [ ] `edit` with an unknown ID prints `todo: no item <id>`; bad text and bad IDs fail as in P2-2 and P2-3 (unittest)
+- [ ] `edit` on a done item prints `todo: item <id> is done`, exits 1 and leaves the file unchanged (D-6; unittest)
 
 ## Merge-hold list
 
