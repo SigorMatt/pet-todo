@@ -10,7 +10,7 @@ step: done
 pr: merged:8
 cursor: 6920067803
 counter: 1
-intent: close room 5 after #6923380796
+intent: none
 waiting_for_owner: no
 status: done
 mission_started: 2026-11-16T15:02:32Z
