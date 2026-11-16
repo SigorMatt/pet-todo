@@ -68,7 +68,7 @@ Owned by the lead. Only `room.py` edits the block above (`state set`, `state nex
 | Task | Branch | Attempt | Status |
 | --- | --- | --- | --- |
 | M4-T1T2 (text) | builder a0ebbbde7d925bed6 | 1 | running |
-| M4-T3T4 (IDs) | builder af3123fa0f0cbbee0 | 1 | running |
+| M4-T3T4 (IDs) | builder af3123fa0f0cbbee0 | 1 | merged (870fa40) |
 
 ### Parked questions
 
