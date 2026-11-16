@@ -3,12 +3,12 @@
 ```agent-room-state
 lease_session: ee4486a1
 lease_generation: 5
-phase: 1
-room: 1
+phase: 2
+room: 5
 mission: M3
-step: done
+step: plan
 pr: merged:4
-cursor: 6898483510
+cursor: none
 counter: 0
 intent: none
 waiting_for_owner: no
