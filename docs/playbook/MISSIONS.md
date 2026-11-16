@@ -1,8 +1,8 @@
 # Missions
 
 ```agent-room-state
-lease_session: none
-lease_generation: 4
+lease_session: ee4486a1
+lease_generation: 5
 phase: 1
 room: 1
 mission: M3
@@ -12,7 +12,7 @@ cursor: 6898483510
 counter: 0
 intent: none
 waiting_for_owner: no
-status: done
+status: running
 mission_started: 2026-11-15T18:19:07Z
 ```
 
