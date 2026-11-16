@@ -437,6 +437,13 @@ class LockTest(unittest.TestCase):
         with self.assertRaises(OSError):
             store.lock(path)
 
+    @unittest.skipUnless(hasattr(os, "mkfifo"), "needs FIFOs")
+    def test_non_regular_lock_file_raises_oserror(self):
+        # Qodo PR #8: a lock file that isn't a regular file is refused.
+        os.mkfifo(self.path + ".lock")
+        with self.assertRaises(OSError):
+            store.lock(self.path)
+
     def _refuse_writing_lock_file(self, opened, err=errno.EACCES):
         """Patch os.open to refuse write access to the lock file, as for another user's 0644 file.
 

@@ -1,6 +1,7 @@
 """Load and save the to-do list; the only module that touches the file."""
 
 import datetime
+import errno
 import fcntl
 import json
 import os
@@ -75,15 +76,26 @@ def _open_lock_file(name):
 
     flock needs no write access, so an existing lock file this user may not
     write (say, one another user created) is opened read-only instead. Any
-    other failure raises the OSError from the read-write open.
+    other failure raises the OSError from the read-write open. Both opens are
+    non-blocking, so a FIFO planted at name cannot stall them, and anything
+    but a regular file is refused with an OSError (flock itself never blocks:
+    lock polls with LOCK_NB, so O_NONBLOCK is left set).
     """
+    flags = os.O_NONBLOCK | os.O_CLOEXEC
     try:
-        return os.open(name, os.O_RDWR | os.O_CREAT | os.O_CLOEXEC, 0o666)
+        fd = os.open(name, os.O_RDWR | os.O_CREAT | flags, 0o666)
     except PermissionError as exc:
         try:
-            return os.open(name, os.O_RDONLY | os.O_CLOEXEC)
+            fd = os.open(name, os.O_RDONLY | flags)
         except OSError:
             raise exc from None
+    try:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            raise OSError(errno.EINVAL, "lock file is not a regular file", name)
+    except BaseException:
+        os.close(fd)
+        raise
+    return fd
 
 
 def lock(path, timeout=None, interval=None):
@@ -93,7 +105,8 @@ def lock(path, timeout=None, interval=None):
     LOCK_INTERVAL) for up to ``timeout`` seconds (default LOCK_TIMEOUT), then
     raises LockedError naming path. An OSError opening the lock file propagates.
     The lock file is created if needed and left on disk; an existing one this
-    user cannot write is opened read-only, which is enough for flock.
+    user cannot write is opened read-only, which is enough for flock. A lock
+    file that isn't a regular file raises OSError.
     """
     if timeout is None:
         timeout = LOCK_TIMEOUT

@@ -1034,6 +1034,33 @@ class LockTest(CliTestCase):
                 self.assertNotEqual(self.read(), self.ITEMS)
                 self.assertTrue(self.lock_is_free())
 
+    @unittest.skipUnless(hasattr(os, "mkfifo"), "needs FIFOs")
+    def test_fifo_lock_file_this_user_cannot_write_gives_cannot_write_promptly(self):
+        # Qodo PR #8 (cold M6 S1-1): a FIFO planted at the lock path, which this
+        # user may not open for writing, must not hang the read-only fallback.
+        os.mkfifo(self.lock_path)
+        script = (
+            "import errno, os, sys\n"
+            "from todo import cli\n"
+            "lock_file, real_open = sys.argv[1], os.open\n"
+            "def fake_open(name, flags, *args, **kwargs):\n"
+            "    if name == lock_file and flags & (os.O_WRONLY | os.O_RDWR):\n"
+            "        raise PermissionError(errno.EACCES, os.strerror(errno.EACCES), name)\n"
+            "    return real_open(name, flags, *args, **kwargs)\n"
+            "os.open = fake_open\n"
+            "sys.exit(cli.main(sys.argv[2:]))\n")
+        for argv in self.CHANGES:
+            with self.subTest(argv=argv):
+                try:
+                    result = subprocess.run(
+                        [sys.executable, "-c", script, self.lock_path] + argv,
+                        cwd=ROOT, capture_output=True, text=True, timeout=10)
+                except subprocess.TimeoutExpired:
+                    self.fail("hung opening a FIFO lock file")
+                self.assertEqual((result.returncode, result.stdout, result.stderr),
+                                 (1, "", "todo: cannot write {}\n".format(self.path)))
+                self.assertEqual(self.read(), self.ITEMS)
+
     # c3: a busy lock times out; one released in time is waited for.
 
     def test_busy_lock_gives_file_is_locked_and_leaves_file(self):
