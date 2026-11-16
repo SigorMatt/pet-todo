@@ -1,11 +1,13 @@
 """Load and save the to-do list; the only module that touches the file."""
 
 import datetime
+import fcntl
 import json
 import os
 import re
 import stat
 import tempfile
+import time
 
 
 # The largest item ID a valid file may hold (next_id may be one more): the
@@ -20,6 +22,77 @@ class StoreError(Exception):
     def __init__(self, path, message=None):
         self.path = path
         super().__init__(message or "cannot read {}".format(path))
+
+
+class LockedError(Exception):
+    """Another run held the lock for the data file at ``path`` past the timeout (D-5)."""
+
+    def __init__(self, path):
+        self.path = path
+        super().__init__("file is locked {}".format(path))
+
+
+# D-5: how long a changing command waits for the lock, and how often it retries.
+# Read on every call, so tests can patch them.
+LOCK_TIMEOUT = 5.0
+LOCK_INTERVAL = 0.05
+
+
+def lock_path(path):
+    """The lock file for the data file at path: the path plus ``.lock`` (D-4)."""
+    return path + ".lock"
+
+
+class FileLock:
+    """An exclusive flock held on an open lock file; a context manager that releases it."""
+
+    def __init__(self, fd):
+        self._fd = fd
+
+    def release(self):
+        """Unlock and close the lock file; calling it again does nothing."""
+        fd, self._fd = self._fd, None
+        if fd is None:
+            return
+        try:
+            fcntl.flock(fd, fcntl.LOCK_UN)
+        finally:
+            os.close(fd)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc_info):
+        self.release()
+
+
+def lock(path, timeout=None, interval=None):
+    """Take an exclusive lock on lock_path(path) and return it as a FileLock (D-4, D-5).
+
+    Polls ``flock(LOCK_EX | LOCK_NB)`` every ``interval`` seconds (default
+    LOCK_INTERVAL) for up to ``timeout`` seconds (default LOCK_TIMEOUT), then
+    raises LockedError naming path. An OSError opening the lock file propagates.
+    The lock file is created if needed and left on disk.
+    """
+    if timeout is None:
+        timeout = LOCK_TIMEOUT
+    if interval is None:
+        interval = LOCK_INTERVAL
+    fd = os.open(lock_path(path), os.O_RDWR | os.O_CREAT | os.O_CLOEXEC, 0o666)
+    try:
+        deadline = time.monotonic() + timeout
+        while True:
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                return FileLock(fd)
+            except BlockingIOError:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise LockedError(path) from None
+                time.sleep(min(interval, remaining))
+    except BaseException:
+        os.close(fd)
+        raise
 
 
 def default_path():

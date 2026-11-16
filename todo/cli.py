@@ -116,6 +116,14 @@ def _build_parser():
     return parser
 
 
+def _lock(path):
+    """Take the lock for a changing command (D-4); failing to open it is a write error."""
+    try:
+        return store.lock(path)
+    except OSError as exc:
+        raise WriteError(path) from exc
+
+
 def _save(path, data):
     try:
         store.save(path, data)
@@ -150,16 +158,17 @@ def _cmd_add(args, path):
     check_text(args.text)
     if args.due is not None and not store.is_iso_date(args.due):
         raise BadDateError(args.due)
-    data = store.load(path)
-    item_id = data["next_id"]
-    if item_id > store.MAX_ID:
-        raise NoMoreIdsError()
-    item = {"id": item_id, "text": args.text, "done": False}
-    if args.due is not None:
-        item["due"] = args.due
-    data["items"].append(item)
-    data["next_id"] = item_id + 1
-    _save(path, data)
+    with _lock(path):
+        data = store.load(path)
+        item_id = data["next_id"]
+        if item_id > store.MAX_ID:
+            raise NoMoreIdsError()
+        item = {"id": item_id, "text": args.text, "done": False}
+        if args.due is not None:
+            item["due"] = args.due
+        data["items"].append(item)
+        data["next_id"] = item_id + 1
+        _save(path, data)
     print("added {}".format(item_id))
 
 
@@ -184,31 +193,34 @@ def _cmd_list(args, path):
 
 def _cmd_done(args, path):
     item_id = parse_id(args.id)
-    data = store.load(path)
-    item = data["items"][_find(data, item_id)]
-    if not item["done"]:
-        item["done"] = True
-        _save(path, data)
+    with _lock(path):
+        data = store.load(path)
+        item = data["items"][_find(data, item_id)]
+        if not item["done"]:
+            item["done"] = True
+            _save(path, data)
     print("done {}".format(item["id"]))
 
 
 def _cmd_remove(args, path):
     item_id = parse_id(args.id)
-    data = store.load(path)
-    item = data["items"].pop(_find(data, item_id))
-    _save(path, data)
+    with _lock(path):
+        data = store.load(path)
+        item = data["items"].pop(_find(data, item_id))
+        _save(path, data)
     print("removed {}".format(item["id"]))
 
 
 def _cmd_edit(args, path):
     item_id = parse_id(args.id)
     check_text(args.text)
-    data = store.load(path)
-    item = data["items"][_find(data, item_id)]
-    if item["done"]:
-        raise DoneItemError(item["id"])
-    item["text"] = args.text
-    _save(path, data)
+    with _lock(path):
+        data = store.load(path)
+        item = data["items"][_find(data, item_id)]
+        if item["done"]:
+            raise DoneItemError(item["id"])
+        item["text"] = args.text
+        _save(path, data)
     print("edited {}".format(item["id"]))
 
 
@@ -301,6 +313,9 @@ def main(argv=None, today=None):
         _COMMANDS[args.command](args, store.default_path())
     except store.StoreError as exc:
         print("todo: cannot read {}".format(exc.path), file=sys.stderr)
+        return 1
+    except store.LockedError as exc:
+        print("todo: {}".format(exc), file=sys.stderr)
         return 1
     except (WriteError, NoItemError, DoneItemError, BadIdError, NoMoreIdsError, BadDateError, BadTextError) as exc:
         print("todo: {}".format(exc), file=sys.stderr)

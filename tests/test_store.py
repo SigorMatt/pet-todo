@@ -1,8 +1,11 @@
 import contextlib
+import fcntl
 import io
 import json
 import os
 import tempfile
+import threading
+import time
 import unittest
 from unittest import mock
 
@@ -321,6 +324,93 @@ class StoreTest(unittest.TestCase):
 
     def test_failed_replace_leaves_original_and_no_temp(self):
         self._assert_failed_write_keeps_original("todo.store.os.replace")
+
+
+class LockTest(unittest.TestCase):
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.path = os.path.join(tmp.name, "todo.json")
+
+    def _try_flock(self):
+        """True if a separate open file description can take the lock now (then drops it)."""
+        fd = os.open(self.path + ".lock", os.O_RDWR | os.O_CREAT)
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            return False
+        finally:
+            os.close(fd)
+        return True
+
+    def _hold(self):
+        """Hold the lock from a separate fd; return a function that releases it."""
+        fd = os.open(self.path + ".lock", os.O_RDWR | os.O_CREAT)
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        released = []
+
+        def release():
+            if not released:
+                released.append(True)
+                os.close(fd)
+        self.addCleanup(release)
+        return release
+
+    def test_lock_path_is_data_path_plus_lock(self):
+        self.assertEqual(store.lock_path("/a/b.json"), "/a/b.json.lock")
+
+    def test_lock_creates_lock_file_holds_and_releases(self):
+        with store.lock(self.path):
+            self.assertTrue(os.path.exists(self.path + ".lock"))
+            self.assertFalse(self._try_flock())
+        self.assertTrue(self._try_flock())
+        self.assertTrue(os.path.exists(self.path + ".lock"))
+        self.assertFalse(os.path.exists(self.path))
+
+    def test_lock_is_released_when_body_raises(self):
+        with self.assertRaises(RuntimeError):
+            with store.lock(self.path):
+                raise RuntimeError("boom")
+        self.assertTrue(self._try_flock())
+
+    def test_release_twice_is_harmless(self):
+        held = store.lock(self.path)
+        held.release()
+        held.release()
+        self.assertTrue(self._try_flock())
+
+    def test_busy_lock_times_out_with_data_path(self):
+        self._hold()
+        start = time.monotonic()
+        with self.assertRaises(store.LockedError) as cm:
+            store.lock(self.path, timeout=0.2, interval=0.01)
+        self.assertGreaterEqual(time.monotonic() - start, 0.2)
+        self.assertEqual(cm.exception.path, self.path)
+        self.assertEqual(str(cm.exception), "file is locked {}".format(self.path))
+
+    def test_defaults_come_from_module_constants(self):
+        self._hold()
+        with mock.patch.object(store, "LOCK_TIMEOUT", 0.1), \
+                mock.patch.object(store, "LOCK_INTERVAL", 0.01):
+            start = time.monotonic()
+            with self.assertRaises(store.LockedError):
+                store.lock(self.path)
+            self.assertLess(time.monotonic() - start, 2)
+
+    def test_lock_released_within_timeout_is_waited_for(self):
+        release = self._hold()
+        timer = threading.Timer(0.2, release)
+        timer.start()
+        self.addCleanup(timer.cancel)
+        start = time.monotonic()
+        with store.lock(self.path, timeout=5, interval=0.01):
+            self.assertGreaterEqual(time.monotonic() - start, 0.15)
+            self.assertFalse(self._try_flock())
+
+    def test_unopenable_lock_file_raises_oserror(self):
+        path = os.path.join(os.path.dirname(self.path), "no", "t.json")
+        with self.assertRaises(OSError):
+            store.lock(path)
 
 
 if __name__ == "__main__":
