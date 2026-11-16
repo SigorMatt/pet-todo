@@ -10,7 +10,7 @@ step: PR
 pr: none
 cursor: 6919602412
 counter: 1
-intent: none
+intent: open PR mission/M5-edit
 waiting_for_owner: no
 status: running
 mission_started: 2026-11-16T14:39:41Z
