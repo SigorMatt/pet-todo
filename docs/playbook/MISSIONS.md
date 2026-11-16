@@ -71,6 +71,7 @@ Owned by the lead. Only `room.py` edits the block above (`state set`, `state nex
 
 | Task | Branch | Attempt | Status |
 | --- | --- | --- | --- |
+| M6-T1 | builder a4fc1de31586d4703 (worktree) | 1 | running |
 
 ### Parked questions
 
