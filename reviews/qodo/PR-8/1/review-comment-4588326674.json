@@ -1,0 +1,71 @@
+{
+  "url": "https://api.github.com/repos/SigorMatt/pet-todo/pulls/comments/4588326674",
+  "pull_request_review_id": 5923372669,
+  "id": 4588326674,
+  "node_id": "PRRC_kwDOVuotTc8AAAABEXxPEg",
+  "diff_hunk": "@@ -22,6 +24,98 @@ def __init__(self, path, message=None):\n         super().__init__(message or \"cannot read {}\".format(path))\n \n \n+class LockedError(Exception):\n+    \"\"\"Another run held the lock for the data file at ``path`` past the timeout (D-5).\"\"\"\n+\n+    def __init__(self, path):\n+        self.path = path\n+        super().__init__(\"file is locked {}\".format(path))\n+\n+\n+# D-5: how long a changing command waits for the lock, and how often it retries.\n+# Read on every call, so tests can patch them.\n+LOCK_TIMEOUT = 5.0\n+LOCK_INTERVAL = 0.05\n+\n+\n+def lock_path(path):\n+    \"\"\"The lock file for the data file at path: its resolved path plus ``.lock`` (D-4).\n+\n+    Symlinks are resolved as save resolves them, so every name for one data\n+    file takes the same lock, and the lock file sits beside the file written.\n+    \"\"\"\n+    return os.path.realpath(path) + \".lock\"",
+  "path": "todo/store.py",
+  "commit_id": "f3e4b8ac7d2a77f06ce9c1093325c94690d184a5",
+  "original_commit_id": "f3e4b8ac7d2a77f06ce9c1093325c94690d184a5",
+  "user": {
+    "login": "qodo-code-review[bot]",
+    "id": 151058649,
+    "node_id": "BOT_kgDOCQD42Q",
+    "avatar_url": "https://avatars.githubusercontent.com/in/484649?v=4",
+    "gravatar_id": "",
+    "url": "https://api.github.com/users/qodo-code-review%5Bbot%5D",
+    "html_url": "https://github.com/apps/qodo-code-review",
+    "followers_url": "https://api.github.com/users/qodo-code-review%5Bbot%5D/followers",
+    "following_url": "https://api.github.com/users/qodo-code-review%5Bbot%5D/following{/other_user}",
+    "gists_url": "https://api.github.com/users/qodo-code-review%5Bbot%5D/gists{/gist_id}",
+    "starred_url": "https://api.github.com/users/qodo-code-review%5Bbot%5D/starred{/owner}{/repo}",
+    "subscriptions_url": "https://api.github.com/users/qodo-code-review%5Bbot%5D/subscriptions",
+    "organizations_url": "https://api.github.com/users/qodo-code-review%5Bbot%5D/orgs",
+    "repos_url": "https://api.github.com/users/qodo-code-review%5Bbot%5D/repos",
+    "events_url": "https://api.github.com/users/qodo-code-review%5Bbot%5D/events{/privacy}",
+    "received_events_url": "https://api.github.com/users/qodo-code-review%5Bbot%5D/received_events",
+    "type": "Bot",
+    "user_view_type": "public",
+    "site_admin": false
+  },
+  "body": "<img src=\"https://img.shields.io/badge/Medium-634FD1?style=flat-square\" height=\"20px\" alt=\"Remediation recommended\">\n\n3\\. Retargeted links can lose additions <code>🐞 Bug</code> <code>≡ Correctness</code>\n\n<pre>\n<b><i>lock_path()</i></b> resolves the data symlink when acquiring the lock, but <b><i>_cmd_add</i></b> passes the original\npath to <b><i>load()</i></b> and <b><i>save()</i></b>, which resolve it again later. If the link changes from target A to\ntarget B during a command, that command can modify B while holding A&#x27;s lock, alongside a writer\nholding B&#x27;s lock.\n</pre>\n\n\n<details>\n<summary><strong>Agent Prompt</strong></summary>\n\n```\n## Issue description\nThe lock key and the data read/write target can differ when a symlink changes during a command.\n## Fix Focus Areas\n- todo/store.py[41-47]\n- todo/cli.py[161-171]\n- todo/cli.py[196-223]\n## Recommended Fix\nResolve the data target once for each changing command, then use that same target for lock acquisition, loading and saving. Add a test that retargets the symlink after lock acquisition and checks that the command does not write the newly selected target under the old target's lock.\n```\n\n<code>ⓘ Copy this prompt and use it to remediate the issue with your preferred AI generation tools</code>\n</details>\n\n[Dismiss ↗](https://app.qodo.ai/findings/ebdd2f04-6d0a-48d7-82e5-3d271bbde6e6?action=dismiss&origin=git) | [View ↗](https://app.qodo.ai/findings/ebdd2f04-6d0a-48d7-82e5-3d271bbde6e6)",
+  "created_at": "2026-11-16T16:18:56Z",
+  "updated_at": "2026-11-16T16:18:56Z",
+  "html_url": "https://github.com/SigorMatt/pet-todo/pull/8#discussion_r4588326674",
+  "pull_request_url": "https://api.github.com/repos/SigorMatt/pet-todo/pulls/8",
+  "_links": {
+    "self": {
+      "href": "https://api.github.com/repos/SigorMatt/pet-todo/pulls/comments/4588326674"
+    },
+    "html": {
+      "href": "https://github.com/SigorMatt/pet-todo/pull/8#discussion_r4588326674"
+    },
+    "pull_request": {
+      "href": "https://api.github.com/repos/SigorMatt/pet-todo/pulls/8"
+    }
+  },
+  "reactions": {
+    "url": "https://api.github.com/repos/SigorMatt/pet-todo/pulls/comments/4588326674/reactions",
+    "total_count": 0,
+    "+1": 0,
+    "-1": 0,
+    "laugh": 0,
+    "hooray": 0,
+    "confused": 0,
+    "heart": 0,
+    "rocket": 0,
+    "eyes": 0
+  },
+  "start_line": null,
+  "original_start_line": null,
+  "start_side": null,
+  "line": 47,
+  "original_line": 47,
+  "side": "RIGHT",
+  "author_association": "NONE",
+  "original_position": 38,
+  "position": 38,
+  "subject_type": "line",
+  "is_copilot_code_review": false,
+  "copilot_code_review_sources": []
+}
