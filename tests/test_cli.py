@@ -65,7 +65,7 @@ class AddTest(CliTestCase):
         self.assertEqual([i["id"] for i in data["items"]],
                          [store.MAX_ID - 1, store.MAX_ID])
 
-    def test_add_above_max_id_cannot_write_and_saves_nothing(self):
+    def test_add_above_max_id_no_more_ids_and_saves_nothing(self):
         for next_id in (1, store.MAX_ID + 1):
             with self.subTest(next_id=next_id):
                 self.write(json.dumps({"next_id": next_id, "items": [
@@ -74,7 +74,7 @@ class AddTest(CliTestCase):
                     before = f.read()
                 self.assertEqual(
                     self.run_cli("add", "b"),
-                    (1, "", "todo: cannot write {}\n".format(self.path)))
+                    (1, "", "todo: no more ids\n"))
                 with open(self.path, "rb") as f:
                     self.assertEqual(f.read(), before)
                 self.assertEqual(self.run_cli("list"), (0, "{} [ ] a\n".format(store.MAX_ID), ""))
@@ -353,44 +353,19 @@ class RemoveTest(CliTestCase):
 
 
 class NoItemTest(CliTestCase):
-    def test_unknown_or_non_integer_id(self):
+    def test_well_formed_unknown_id_is_no_item(self):
         self.run_cli("add", "buy milk")
-        with open(self.path, encoding="utf-8") as f:
+        with open(self.path, "rb") as f:
             before = f.read()
         for command in ("done", "remove"):
-            for raw in ("2", "0", "-1", "abc", "1.5", ""):
+            for raw in ("2", "9" * 19, str(store.MAX_ID)):
                 with self.subTest(command=command, raw=raw):
                     self.assertEqual(
                         self.run_cli(command, raw),
                         (1, "", "todo: no item {}\n".format(raw)),
                     )
-        with open(self.path, encoding="utf-8") as f:
+        with open(self.path, "rb") as f:
             self.assertEqual(f.read(), before)
-
-    def test_id_must_be_plain_ascii_digits(self):
-        for text in ("a", "b", "c"):
-            self.run_cli("add", text)
-        with open(self.path, encoding="utf-8") as f:
-            before = f.read()
-        for command in ("done", "remove"):
-            for raw in (" 1", "1 ", "+2", "\u0663", "1_0", "\uff11"):
-                with self.subTest(command=command, raw=raw):
-                    self.assertEqual(
-                        self.run_cli(command, raw),
-                        (1, "", "todo: no item {}\n".format(raw)),
-                    )
-        with open(self.path, encoding="utf-8") as f:
-            self.assertEqual(f.read(), before)
-
-    def test_dash_id_is_no_item_not_an_option(self):
-        self.run_cli("add", "buy milk")
-        for command in ("done", "remove"):
-            for raw in ("-x", "-1", "--all", "-", "--", "-1x"):
-                with self.subTest(command=command, raw=raw):
-                    self.assertEqual(
-                        self.run_cli(command, raw),
-                        (1, "", "todo: no item {}\n".format(raw)),
-                    )
 
     def test_help_still_shows_help(self):
         for argv in (["-h"], ["--help"], ["add", "-h"], ["list", "-h"],
@@ -399,26 +374,6 @@ class NoItemTest(CliTestCase):
                 with self.assertRaises(SystemExit) as cm:
                     self.run_cli(*argv)
                 self.assertEqual(cm.exception.code, 0)
-
-    def test_help_flag_after_done_or_remove_is_an_id(self):
-        self.run_cli("add", "buy milk")
-        for command in ("done", "remove"):
-            for raw in ("-h", "--help"):
-                with self.subTest(command=command, raw=raw):
-                    self.assertEqual(
-                        self.run_cli(command, raw),
-                        (1, "", "todo: no item {}\n".format(raw)),
-                    )
-
-    def test_overlong_digit_id_is_no_item(self):
-        self.run_cli("add", "buy milk")
-        raw = "1" * 5000
-        for command in ("done", "remove"):
-            with self.subTest(command=command):
-                self.assertEqual(
-                    self.run_cli(command, raw),
-                    (1, "", "todo: no item {}\n".format(raw)),
-                )
 
     def test_unknown_id_on_missing_file(self):
         for command in ("done", "remove"):
@@ -436,6 +391,66 @@ class NoItemTest(CliTestCase):
                 self.assertEqual(
                     self.run_cli(command, "1"), (1, "", "todo: no item 1\n")
                 )
+
+
+class BadIdTest(CliTestCase):
+    def setUp(self):
+        super().setUp()
+        for text in ("a", "b", "c"):
+            self.run_cli("add", text)
+        with open(self.path, "rb") as f:
+            self.before = f.read()
+
+    def assert_bad_ids(self, raws):
+        for command in ("done", "remove"):
+            for raw in raws:
+                with self.subTest(command=command, raw=raw):
+                    self.assertEqual(
+                        self.run_cli(command, raw),
+                        (1, "", "todo: bad id {}\n".format(raw[:20])),
+                    )
+                    with open(self.path, "rb") as f:
+                        self.assertEqual(f.read(), self.before)
+
+    def test_malformed_ids(self):
+        self.assert_bad_ids(("01", "001", "0", "", "-1", "1.0", "1.5", "abc", "1e3"))
+
+    def test_id_must_be_plain_ascii_digits(self):
+        self.assert_bad_ids((" 1", "1 ", "+2", "1\n", "1_0",
+                             "\u0663", "\u0661\u0662", "\uff11", "\uff12"))
+
+    def test_dash_id_is_bad_id_not_an_option(self):
+        self.assert_bad_ids(("-x", "-1", "--all", "-", "--", "-1x"))
+
+    def test_help_flag_after_done_or_remove_is_a_bad_id(self):
+        self.assert_bad_ids(("-h", "--help"))
+
+    def test_too_many_digits(self):
+        self.assert_bad_ids(("1" * 20, "1" * 5000, "0" * 4400 + "1"))
+
+    def test_message_cuts_value_to_20_characters(self):
+        code, out, err = self.run_cli("done", "1" * 5000)
+        self.assertEqual((code, out, err), (1, "", "todo: bad id {}\n".format("1" * 20)))
+
+    def test_bad_id_checked_before_file_is_loaded(self):
+        self.write("not json")
+        for command in ("done", "remove"):
+            with self.subTest(command=command):
+                self.assertEqual(self.run_cli(command, "01"), (1, "", "todo: bad id 01\n"))
+        os.remove(self.path)
+        for command in ("done", "remove"):
+            with self.subTest(command=command, missing=True):
+                self.assertEqual(self.run_cli(command, "abc"), (1, "", "todo: bad id abc\n"))
+        self.assertFalse(os.path.exists(self.path))
+
+    def test_parse_id_helper(self):
+        self.assertEqual(cli.parse_id("1"), 1)
+        self.assertEqual(cli.parse_id(str(store.MAX_ID)), store.MAX_ID)
+        self.assertEqual(cli.parse_id("9" * 19), int("9" * 19))
+        for raw in ("0", "01", "", "1" * 20, "\u0661"):
+            with self.subTest(raw=raw):
+                with self.assertRaises(cli.BadIdError):
+                    cli.parse_id(raw)
 
 
 class ErrorTest(CliTestCase):
