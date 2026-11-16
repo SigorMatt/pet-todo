@@ -10,7 +10,7 @@ step: PR
 pr: none
 cursor: 6920067803
 counter: 1
-intent: none
+intent: open PR mission/M6-lock
 waiting_for_owner: no
 status: running
 mission_started: 2026-11-16T15:02:32Z
