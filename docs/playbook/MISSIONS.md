@@ -8,7 +8,7 @@ room: 5
 mission: M4
 step: cold round 1
 pr: none
-cursor: none
+cursor: 6911872424
 counter: 1
 intent: none
 waiting_for_owner: no
