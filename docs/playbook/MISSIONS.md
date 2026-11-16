@@ -1,8 +1,8 @@
 # Missions
 
 ```agent-room-state
-lease_session: ee4486a1
-lease_generation: 5
+lease_session: ec95c988
+lease_generation: 6
 phase: 2
 room: 5
 mission: M4
