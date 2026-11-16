@@ -26,6 +26,14 @@ Owned by the lead. Only `room.py` edits the block above (`state set`, `state nex
 | M2 | `mission/M2-done-remove` | merged | #3 (9ffe9a1) | P1-2 |
 | M3 | `mission/M3-due-overdue` | merged | #4 (35b908d) | P1-3 |
 
+## Phase 2
+
+| Mission | Branch | Status | PR | Criteria |
+| --- | --- | --- | --- | --- |
+| M4 | `mission/M4-text-and-ids` | planned | | P2-2, P2-3 (ledger L-3, L-4, L-5, L-6) |
+| M5 | `mission/M5-edit` | planned | | P2-4 |
+| M6 | `mission/M6-lock` | planned | | P2-1 (ledger L-1; c3 waits on Q-1) |
+
 ## Lead decisions
 
 - Phase 1 plan: the template's placeholder M1 row was replaced, so missions are M1–M3 (planner's draft numbered them M2–M4).
@@ -35,6 +43,14 @@ Owned by the lead. Only `room.py` edits the block above (`state set`, `state nex
 - For `done` and `remove`, a single argument is always the ID, including `-h`/`--help`, which give `todo: no item <arg>`; `todo -h`, `add -h` and `list -h` still show help (cold M2 R1-2; the earlier choice to keep `done -h` as help failed audit twice).
 - Stored item IDs must be 1..MAX_ID (2**63-1) and `next_id` at most MAX_ID+1, else `todo: cannot read`; an `add` past MAX_ID prints `todo: cannot write <path>` (qodo PR #3 findings on negative and large IDs).
 - Today for `list --overdue` is injected through a `today` parameter of `cli.main` (playbook: lead's discretion).
+- Phase 2 plan: M4 text and IDs, M5 edit, M6 lock last (its criteria name `edit`, and P2-1 c3 waits on Q-1, escalated at phase start).
+- `0` and the empty string are `bad id` (D-3); a well-formed 19-digit ID above MAX_ID is `no item`.
+- `done -h` / `remove --help` now give `todo: bad id -h` (D-3), superseding the phase 1 choice that they give `no item`.
+- Argument checks (text, ID, date) run before the file is loaded (and before the lock in M6). For `edit` with a bad ID and bad text, `bad id` wins.
+- Dash-led TEXT for `edit` behaves like `add` (usage error unless after `--`).
+- D-2 is applied as written: only category Cc is rejected, so U+2028/U+2029 are accepted.
+- Stored text that D-2 would reject (hand-edited files) is out of scope: P2-2 c2 covers only text `add` accepts.
+- Lock path is `$TODO_FILE` + `.lock` literally (D-4 wording); the lock file stays on disk (lock file mode is lead's discretion).
 
 ## Current mission
 
