@@ -547,5 +547,140 @@ class SubprocessTest(CliTestCase):
         self.assertEqual(r.stderr, "todo: cannot write {}\n".format(path))
 
 
+class BadTextTest(CliTestCase):
+    """D-2: add rejects bad text before loading, leaving the file unchanged."""
+
+    def assert_bad_text(self, text):
+        # With a missing file: rejected, and the file is not created.
+        self.assertEqual(self.run_cli("add", text), (1, "", "todo: bad text\n"))
+        self.assertFalse(os.path.exists(self.path))
+        # With an existing file: rejected, and the file is byte-identical.
+        self.write('{"next_id": 2, "items": [{"id": 1, "text": "a", "done": false}]}')
+        with open(self.path, "rb") as f:
+            before = f.read()
+        self.assertEqual(self.run_cli("add", text), (1, "", "todo: bad text\n"))
+        with open(self.path, "rb") as f:
+            self.assertEqual(f.read(), before)
+
+    def test_empty(self):
+        self.assert_bad_text("")
+
+    def test_spaces_only(self):
+        self.assert_bad_text("   ")
+
+    def test_newline(self):
+        self.assert_bad_text("buy\nmilk")
+
+    def test_carriage_return(self):
+        self.assert_bad_text("buy\rmilk")
+
+    def test_tab(self):
+        self.assert_bad_text("buy\tmilk")
+
+    def test_nul(self):
+        self.assert_bad_text("buy\x00milk")
+
+    def test_del(self):
+        self.assert_bad_text("buy\x7fmilk")
+
+    def test_next_line_u0085(self):
+        self.assert_bad_text("buy\x85milk")
+
+    def test_surrogate_escaped_bytes(self):
+        # How Python decodes argv bytes that aren't valid UTF-8.
+        self.assert_bad_text(b"buy \xff milk".decode("utf-8", "surrogateescape"))
+
+    def test_bad_text_with_due_is_bad_text(self):
+        self.assertEqual(self.run_cli("add", "a\nb", "--due", "2026-11-20"),
+                         (1, "", "todo: bad text\n"))
+        self.assertFalse(os.path.exists(self.path))
+
+    def test_check_text_helper(self):
+        cli.check_text("buy milk")
+        with self.assertRaises(cli.BadTextError):
+            cli.check_text("\n")
+
+
+# Texts D-2 accepts; each must list as exactly one line.
+ACCEPTED_TEXTS = [
+    "buy milk",
+    "café über журнал 漢字",
+    "party \U0001F389\U0001F468‍\U0001F469‍\U0001F467",
+    "[x] looks done",
+    "2 [ ] looks like another item",
+    "  leading and trailing  ",
+    "line separator",
+    "para separator",
+]
+
+
+class OneLinePerItemTest(CliTestCase):
+    """P2-2 c2: list prints exactly one line per item for accepted text."""
+
+    def test_each_accepted_text_lists_as_one_line(self):
+        for n, text in enumerate(ACCEPTED_TEXTS, start=1):
+            with self.subTest(text=text):
+                self.assertEqual(self.run_cli("add", text),
+                                 (0, "added {}\n".format(n), ""))
+        code, out, err = self.run_cli("list")
+        self.assertEqual((code, err), (0, ""))
+        expected = "".join("{} [ ] {}\n".format(n, t)
+                           for n, t in enumerate(ACCEPTED_TEXTS, start=1))
+        self.assertEqual(out, expected)
+        self.assertEqual(out.count("\n"), len(ACCEPTED_TEXTS))
+
+    def test_done_items_with_due_list_as_one_line(self):
+        for text in ACCEPTED_TEXTS:
+            self.run_cli("add", text, "--due", "2026-11-20")
+        self.run_cli("done", "1")
+        code, out, err = self.run_cli("list", "--all")
+        self.assertEqual((code, err), (0, ""))
+        lines = out.split("\n")
+        self.assertEqual(lines[-1], "")
+        self.assertEqual(len(lines) - 1, len(ACCEPTED_TEXTS))
+        for n, (line, text) in enumerate(zip(lines, ACCEPTED_TEXTS), start=1):
+            mark = "x" if n == 1 else " "
+            self.assertEqual(line, "{} [{}] {} (due 2026-11-20)".format(n, mark, text))
+
+
+class TextSubprocessTest(CliTestCase):
+    """Bad argv bytes and strict-UTF-8 stdout through the real entry point (L-3)."""
+
+    def run_module(self, *argv):
+        env = dict(os.environ, TODO_FILE=self.path,
+                   PYTHONIOENCODING="utf-8:strict", LC_ALL="C.UTF-8")
+        return subprocess.run(
+            [sys.executable, "-m", "todo"] + list(argv),
+            cwd=ROOT, env=env, capture_output=True, timeout=30,
+        )
+
+    def test_non_utf8_argv_is_bad_text(self):
+        r = self.run_module(b"add", b"buy \xff\xfe milk")
+        self.assertEqual((r.returncode, r.stdout, r.stderr),
+                         (1, b"", b"todo: bad text\n"))
+        self.assertFalse(os.path.exists(self.path))
+        self.write('{"next_id": 1, "items": []}')
+        with open(self.path, "rb") as f:
+            before = f.read()
+        r = self.run_module(b"add", b"\xc3\x28")
+        self.assertEqual((r.returncode, r.stdout, r.stderr),
+                         (1, b"", b"todo: bad text\n"))
+        with open(self.path, "rb") as f:
+            self.assertEqual(f.read(), before)
+
+    def test_list_on_strict_utf8_stdout_does_not_crash(self):
+        for n, text in enumerate(ACCEPTED_TEXTS, start=1):
+            r = self.run_module("add", text)
+            self.assertEqual((r.returncode, r.stdout, r.stderr),
+                             (0, "added {}\n".format(n).encode(), b""))
+        r = self.run_module(b"add", b"bad \xff")
+        self.assertEqual(r.returncode, 1)  # rejected, so nothing stored
+        r = self.run_module("list")
+        self.assertEqual((r.returncode, r.stderr), (0, b""))
+        expected = "".join("{} [ ] {}\n".format(n, t)
+                           for n, t in enumerate(ACCEPTED_TEXTS, start=1))
+        self.assertEqual(r.stdout.decode("utf-8"), expected)
+
+
 if __name__ == "__main__":
     unittest.main()

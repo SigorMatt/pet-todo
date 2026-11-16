@@ -4,6 +4,7 @@
 import argparse
 import datetime
 import sys
+import unicodedata
 
 from todo import store
 
@@ -34,6 +35,30 @@ class BadDateError(Exception):
     def __init__(self, raw):
         self.raw = raw
         super().__init__("bad date {}".format(raw))
+
+
+class BadTextError(Exception):
+    """Task text that D-2 rejects."""
+
+    def __init__(self):
+        super().__init__("bad text")
+
+
+def check_text(text):
+    """Raise BadTextError unless text is clean task text (D-2).
+
+    Rejected: empty or whitespace-only text, any Unicode category Cc
+    character, and text that isn't valid UTF-8 (argv bytes that Python
+    decoded to surrogate escapes).
+    """
+    if not text.strip():
+        raise BadTextError()
+    try:
+        text.encode("utf-8")
+    except UnicodeEncodeError:
+        raise BadTextError() from None
+    if any(unicodedata.category(c) == "Cc" for c in text):
+        raise BadTextError()
 
 
 class _Parser(argparse.ArgumentParser):
@@ -85,6 +110,7 @@ def _find(data, raw):
 
 
 def _cmd_add(args, path):
+    check_text(args.text)
     if args.due is not None and not store.is_iso_date(args.due):
         raise BadDateError(args.due)
     data = store.load(path)
@@ -205,7 +231,7 @@ def main(argv=None, today=None):
     except store.StoreError as exc:
         print("todo: cannot read {}".format(exc.path), file=sys.stderr)
         return 1
-    except (WriteError, NoItemError, BadDateError) as exc:
+    except (WriteError, NoItemError, BadDateError, BadTextError) as exc:
         print("todo: {}".format(exc), file=sys.stderr)
         return 1
     return 0
