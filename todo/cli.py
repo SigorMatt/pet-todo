@@ -3,7 +3,9 @@
 
 import argparse
 import datetime
+import re
 import sys
+import unicodedata
 
 from todo import store
 
@@ -21,11 +23,26 @@ class WriteError(Exception):
 
 
 class NoItemError(Exception):
-    """No stored item has the ID ``raw`` (or ``raw`` is not an integer)."""
+    """No stored item has the well-formed ID ``raw``."""
 
     def __init__(self, raw):
         self.raw = raw
         super().__init__("no item {}".format(raw))
+
+
+class BadIdError(Exception):
+    """``raw`` is not a well-formed ID (D-3); the message shows its first 20 characters."""
+
+    def __init__(self, raw):
+        self.raw = raw
+        super().__init__("bad id {}".format(raw[:20]))
+
+
+class NoMoreIdsError(Exception):
+    """The next ID would pass store.MAX_ID (D-3)."""
+
+    def __init__(self):
+        super().__init__("no more ids")
 
 
 class BadDateError(Exception):
@@ -34,6 +51,30 @@ class BadDateError(Exception):
     def __init__(self, raw):
         self.raw = raw
         super().__init__("bad date {}".format(raw))
+
+
+class BadTextError(Exception):
+    """Task text that D-2 rejects."""
+
+    def __init__(self):
+        super().__init__("bad text")
+
+
+def check_text(text):
+    """Raise BadTextError unless text is clean task text (D-2).
+
+    Rejected: empty or whitespace-only text, any Unicode category Cc
+    character, and text that isn't valid UTF-8 (argv bytes that Python
+    decoded to surrogate escapes).
+    """
+    if not text.strip():
+        raise BadTextError()
+    try:
+        text.encode("utf-8")
+    except UnicodeEncodeError:
+        raise BadTextError() from None
+    if any(unicodedata.category(c) == "Cc" for c in text):
+        raise BadTextError()
 
 
 class _Parser(argparse.ArgumentParser):
@@ -70,27 +111,37 @@ def _save(path, data):
         raise WriteError(path) from exc
 
 
-def _find(data, raw):
-    """Return the index of the item whose ID is raw, which must be ASCII digits."""
-    if not (raw.isascii() and raw.isdigit()):
-        raise NoItemError(raw)
-    try:
-        item_id = int(raw)
-    except ValueError:  # too many digits for int(); no stored ID is that long
-        raise NoItemError(raw) from None
+# D-3: 1 to 19 ASCII decimal digits, no leading zero.
+_ID = re.compile(r"[1-9][0-9]{0,18}")
+
+
+def parse_id(raw):
+    """Return the ID argument raw as an int, or raise BadIdError if it isn't well formed.
+
+    Well formed means 1 to 19 ASCII decimal digits with no leading zero (D-3).
+    A well-formed ID above store.MAX_ID is returned as is: it simply names no item.
+    """
+    if not _ID.fullmatch(raw):
+        raise BadIdError(raw)
+    return int(raw)
+
+
+def _find(data, item_id):
+    """Return the index of the item whose ID is item_id (an int from parse_id)."""
     for index, item in enumerate(data["items"]):
         if item["id"] == item_id:
             return index
-    raise NoItemError(raw)
+    raise NoItemError(str(item_id))
 
 
 def _cmd_add(args, path):
+    check_text(args.text)
     if args.due is not None and not store.is_iso_date(args.due):
         raise BadDateError(args.due)
     data = store.load(path)
     item_id = data["next_id"]
     if item_id > store.MAX_ID:
-        raise WriteError(path)
+        raise NoMoreIdsError()
     item = {"id": item_id, "text": args.text, "done": False}
     if args.due is not None:
         item["due"] = args.due
@@ -120,8 +171,9 @@ def _cmd_list(args, path):
 
 
 def _cmd_done(args, path):
+    item_id = parse_id(args.id)
     data = store.load(path)
-    item = data["items"][_find(data, args.id)]
+    item = data["items"][_find(data, item_id)]
     if not item["done"]:
         item["done"] = True
         _save(path, data)
@@ -129,8 +181,9 @@ def _cmd_done(args, path):
 
 
 def _cmd_remove(args, path):
+    item_id = parse_id(args.id)
     data = store.load(path)
-    item = data["items"].pop(_find(data, args.id))
+    item = data["items"].pop(_find(data, item_id))
     _save(path, data)
     print("removed {}".format(item["id"]))
 
@@ -205,7 +258,7 @@ def main(argv=None, today=None):
     except store.StoreError as exc:
         print("todo: cannot read {}".format(exc.path), file=sys.stderr)
         return 1
-    except (WriteError, NoItemError, BadDateError) as exc:
+    except (WriteError, NoItemError, BadIdError, NoMoreIdsError, BadDateError, BadTextError) as exc:
         print("todo: {}".format(exc), file=sys.stderr)
         return 1
     return 0
