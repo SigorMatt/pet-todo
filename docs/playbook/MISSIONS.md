@@ -31,7 +31,7 @@ Owned by the lead. Only `room.py` edits the block above (`state set`, `state nex
 | Mission | Branch | Status | PR | Criteria |
 | --- | --- | --- | --- | --- |
 | M4 | `mission/M4-text-and-ids` | merged | #6 (afaabb6) | P2-2, P2-3 (ledger L-3, L-4, L-5, L-6) |
-| M5 | `mission/M5-edit` | in progress | | P2-4 |
+| M5 | `mission/M5-edit` | merged | #7 (fe04c70) | P2-4 (with CHANGE-1, D-6) |
 | M6 | `mission/M6-lock` | planned | | P2-1 (ledger L-1; c3 waits on Q-1) |
 
 ## Lead decisions
@@ -55,24 +55,12 @@ Owned by the lead. Only `room.py` edits the block above (`state set`, `state nex
 
 ## Current mission
 
-- **Mission:** M5, `mission/M5-edit`.
-- **Scope:** Add `edit ID TEXT` to the CLI (DESIGN Interfaces): replace an item's text and print `edited <id>`, keeping its ID, done state and due date. A done item can't be edited (D-6). Reuse M4's text and ID checks so bad text gives `todo: bad text` and a bad ID gives `todo: bad id <value>`, both before the file is loaded; an unknown ID gives `todo: no item <id>`. No locking (M6).
-- **Criteria:**
-  - P2-4 c1: `edit ID TEXT` replaces the text, prints `edited <id>`, done/due/ID unchanged — unittest in `tests/test_cli.py`.
-  - P2-4 c2: unknown ID → `todo: no item <id>`; bad text and bad IDs fail as P2-2/P2-3 (exit 1, file unchanged) — unittests.
-  - P2-4 c3 (CHANGE-1, D-6): `edit` on a done item → `todo: item <id> is done`, exit 1, file unchanged — unittest.
-- **Ledger items:** none target M5.
-- **Spec revision:** b5e0959251057487342e9ade7f4ef375f32ead9f, pipeline main (CHANGE-1 applies now: D-6, P2-4 c3; was 1fadca5).
-- **Tasks:**
-  - T1: `edit` subcommand in `todo/cli.py` (parser, `_cmd_edit`, ID/text guards like `done`/`remove`/`add`, dash-led TEXT as for `add`) plus unittests in `tests/test_cli.py` covering both criteria. Done when: `python3 -m unittest discover -s tests -t .` passes and `python3 -m todo edit` works end to end on a temp `TODO_FILE`.
-  - T2 (CHANGE-1): `edit` on a done item refuses with `todo: item <id> is done`, exit 1, file unchanged; adjust T1's tests that edited done items to edit open ones (the criterion changed, not a weakening). Done when: a unittest for c3 passes and the full suite passes.
+- none
 
 ### Tasks in flight
 
 | Task | Branch | Attempt | Status |
 | --- | --- | --- | --- |
-| M5-T1 | builder abe2cab05e345285b (worktree) | 1 | merged (1e62492) |
-| M5-T2 | builder abe2cab05e345285b (resumed) | 1 | merged (697cfd6) |
 
 ### Parked questions
 
