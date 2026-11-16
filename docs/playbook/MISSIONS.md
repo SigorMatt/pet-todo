@@ -10,7 +10,7 @@ step: PR
 pr: none
 cursor: 6911872424
 counter: 1
-intent: none
+intent: open PR mission/M4-text-and-ids
 waiting_for_owner: no
 status: running
 mission_started: 2026-11-16T08:52:44Z
