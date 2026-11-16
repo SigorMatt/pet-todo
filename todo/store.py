@@ -39,13 +39,23 @@ LOCK_TIMEOUT = 5.0
 LOCK_INTERVAL = 0.05
 
 
+def resolve(path):
+    """The data file path names, with symlinks resolved (as save resolves them).
+
+    A changing command resolves its path once and passes the result as
+    ``target`` to lock, load and save, so all three act on the same file even
+    if a link is retargeted meanwhile; messages keep naming path.
+    """
+    return os.path.realpath(path)
+
+
 def lock_path(path):
     """The lock file for the data file at path: its resolved path plus ``.lock`` (D-4).
 
     Symlinks are resolved as save resolves them, so every name for one data
     file takes the same lock, and the lock file sits beside the file written.
     """
-    return os.path.realpath(path) + ".lock"
+    return resolve(path) + ".lock"
 
 
 class FileLock:
@@ -98,8 +108,11 @@ def _open_lock_file(name):
     return fd
 
 
-def lock(path, timeout=None, interval=None):
+def lock(path, timeout=None, interval=None, target=None):
     """Take an exclusive lock on lock_path(path) and return it as a FileLock (D-4, D-5).
+
+    With ``target`` (path as resolve gave it), the lock file is target plus
+    ``.lock``, and path is resolved no further; path still names the error.
 
     Polls ``flock(LOCK_EX | LOCK_NB)`` every ``interval`` seconds (default
     LOCK_INTERVAL) for up to ``timeout`` seconds (default LOCK_TIMEOUT), then
@@ -112,7 +125,8 @@ def lock(path, timeout=None, interval=None):
         timeout = LOCK_TIMEOUT
     if interval is None:
         interval = LOCK_INTERVAL
-    fd = _open_lock_file(lock_path(path))
+    name = lock_path(path) if target is None else target + ".lock"
+    fd = _open_lock_file(name)
     try:
         deadline = time.monotonic() + timeout
         while True:
@@ -134,10 +148,14 @@ def default_path():
     return os.environ.get("TODO_FILE") or "todo.json"
 
 
-def load(path):
-    """Return the list stored at path; a missing file gives an empty list."""
+def load(path, target=None):
+    """Return the list stored at path; a missing file gives an empty list.
+
+    With ``target`` (path as resolve gave it), that file is read instead;
+    path still names the error.
+    """
     try:
-        with open(path, encoding="utf-8") as f:
+        with open(path if target is None else target, encoding="utf-8") as f:
             data = json.load(f)
     except FileNotFoundError:
         return {"next_id": 1, "items": []}
@@ -215,12 +233,14 @@ def _file_mode(path):
         return 0o666 & ~umask
 
 
-def save(path, data):
+def save(path, data, target=None):
     """Write data to path atomically: a temp file in the same directory, then os.replace.
 
-    A symlinked path is resolved first, so the link stays and its target is replaced.
+    A symlinked path is resolved first, so the link stays and its target is
+    replaced; with ``target`` (path as resolve gave it), that file is replaced.
     """
-    target = os.path.realpath(path)
+    if target is None:
+        target = resolve(path)
     directory = os.path.dirname(target)
     mode = _file_mode(target)
     fd, tmp = tempfile.mkstemp(prefix=".todo-", suffix=".tmp", dir=directory)

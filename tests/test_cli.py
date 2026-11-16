@@ -930,9 +930,9 @@ class LockTest(CliTestCase):
         seen = []
         real_load, real_replace = store.load, os.replace
 
-        def load(path):
+        def load(path, **kwargs):
             seen.append(("load", self.lock_is_free()))
-            return real_load(path)
+            return real_load(path, **kwargs)
 
         def replace(src, dst):
             seen.append(("replace", self.lock_is_free()))
@@ -1167,6 +1167,47 @@ class LockTest(CliTestCase):
                     self.assertNotEqual(self.read(), self.ITEMS)
                     self.assertTrue(os.path.islink(link))
         self.assertTrue(os.path.isfile(self.lock_path))
+
+
+    @unittest.skipUnless(hasattr(os, "symlink"), "needs symlinks")
+    def test_link_retargeted_after_the_lock_still_changes_the_locked_file(self):
+        # Qodo PR #8: the file loaded and saved is the one whose lock is held,
+        # even if the link is pointed elsewhere once the lock is taken.
+        link = self.link_to_data_file("links")
+        other = os.path.join(os.path.dirname(self.path), "other.json")
+        real_lock = store.lock
+
+        def lock_then_retarget(*args, **kwargs):
+            held = real_lock(*args, **kwargs)
+            os.remove(link)
+            os.symlink(other, link)
+            return held
+        with mock.patch.dict(os.environ, {"TODO_FILE": link}), \
+                mock.patch.object(store, "lock", side_effect=lock_then_retarget):
+            for argv in self.CHANGES:
+                with self.subTest(argv=argv):
+                    os.remove(link)
+                    os.symlink(self.path, link)
+                    self.write(self.ITEMS)
+                    with open(other, "w", encoding="utf-8") as f:
+                        f.write(self.ITEMS)
+                    code, out, err = self.run_cli(*argv)
+                    self.assertEqual((code, err), (0, ""))
+                    self.assertNotEqual(self.read(), self.ITEMS)
+                    with open(other, encoding="utf-8") as f:
+                        self.assertEqual(f.read(), self.ITEMS)
+
+    @unittest.skipUnless(hasattr(os, "symlink"), "needs symlinks")
+    def test_errors_name_the_link_as_given(self):
+        link = self.link_to_data_file("links")
+        with mock.patch.dict(os.environ, {"TODO_FILE": link}):
+            self.write("not json")
+            self.assertEqual(self.run_cli("add", "x"),
+                             (1, "", "todo: cannot read {}\n".format(link)))
+            self.write(self.ITEMS)
+            with mock.patch("todo.store.os.replace", side_effect=PermissionError("ro")):
+                self.assertEqual(self.run_cli("add", "x"),
+                                 (1, "", "todo: cannot write {}\n".format(link)))
 
 
 if __name__ == "__main__":
