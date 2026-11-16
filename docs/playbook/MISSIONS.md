@@ -77,6 +77,7 @@ Owned by the lead. Only `room.py` edits the block above (`state set`, `state nex
 | M6-T2 | builder ab9d0b147964089bd (worktree) | 1 | merged (1f611b2) |
 | M6-F1 (cold R1-1, R1-2) | builder a88d74440d1287ae4 (worktree) | 1 | merged (65be81c) |
 | M6-F2 (cold R2-1) | builder a85339448c3e42c50 (worktree) | 1 | merged (2e9f0d6) |
+| M6-Q1 (qodo PR #8 #1, #3) | builder (worktree) | 1 | running |
 
 ### Parked questions
 

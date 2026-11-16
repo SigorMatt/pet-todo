@@ -13,3 +13,4 @@ Example: `PR #12 · same snapshot · first review: 7 findings, 4 already caught,
 - PR #4 · same snapshot · first review: 0 findings, 0 already caught, 0 new, 0 dismissed · rounds: 0 new (final check: no re-review of owner commit ad67877; scoped cold review 1 instead) · 1 min
 - PR #6 · same snapshot · first review: 0 findings, 0 already caught, 0 new, 0 dismissed · rounds: 0 new · 1 min
 - PR #7 · same snapshot · first review: 0 findings, 0 already caught, 0 new, 0 dismissed · rounds: 0 new (final check: no re-review of record commit 8668477) · 1.5 min
+- PR #8 · same snapshot · first review: 3 findings, 1 already caught, 2 new (2 Remediation recommended), 0 dismissed · rounds: 0 new · 3 min · draft
