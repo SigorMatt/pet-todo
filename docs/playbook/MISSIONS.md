@@ -6,9 +6,9 @@ lease_generation: 7
 phase: 2
 room: 5
 mission: M5
-step: close
+step: spec
 pr: merged:7
-cursor: 6919602412
+cursor: 6920067803
 counter: 1
 intent: none
 waiting_for_owner: no
