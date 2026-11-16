@@ -1,4 +1,5 @@
 import contextlib
+import errno
 import fcntl
 import io
 import json
@@ -435,6 +436,40 @@ class LockTest(unittest.TestCase):
         path = os.path.join(os.path.dirname(self.path), "no", "t.json")
         with self.assertRaises(OSError):
             store.lock(path)
+
+    def _refuse_writing_lock_file(self, opened, err=errno.EACCES):
+        """Patch os.open to refuse write access to the lock file, as for another user's 0644 file.
+
+        Flags of the opens let through are appended to ``opened``.
+        """
+        real_open = os.open
+        lock_file = self.path + ".lock"
+
+        def fake_open(name, flags, *args, **kwargs):
+            if name == lock_file and flags & (os.O_WRONLY | os.O_RDWR):
+                raise PermissionError(err, os.strerror(err), name)
+            opened.append(flags)
+            return real_open(name, flags, *args, **kwargs)
+        return mock.patch.object(os, "open", fake_open)
+
+    def test_unwritable_lock_file_is_locked_read_only(self):
+        # R2-1: a lock file another user created (0644) still locks.
+        open(self.path + ".lock", "w").close()
+        for err in (errno.EACCES, errno.EPERM):
+            with self.subTest(err=err):
+                opened = []
+                with self._refuse_writing_lock_file(opened, err):
+                    held = store.lock(self.path)
+                self.assertEqual(opened[-1] & os.O_ACCMODE, os.O_RDONLY)
+                self.assertFalse(self._try_flock())
+                held.release()
+                self.assertTrue(self._try_flock())
+
+    def test_missing_lock_file_that_cannot_be_created_raises_permission_error(self):
+        with self._refuse_writing_lock_file([]):
+            with self.assertRaises(PermissionError):
+                store.lock(self.path)
+        self.assertFalse(os.path.exists(self.path + ".lock"))
 
 
 if __name__ == "__main__":

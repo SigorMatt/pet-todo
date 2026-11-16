@@ -70,19 +70,36 @@ class FileLock:
         self.release()
 
 
+def _open_lock_file(name):
+    """Open (creating if missing) the lock file and return its descriptor.
+
+    flock needs no write access, so an existing lock file this user may not
+    write (say, one another user created) is opened read-only instead. Any
+    other failure raises the OSError from the read-write open.
+    """
+    try:
+        return os.open(name, os.O_RDWR | os.O_CREAT | os.O_CLOEXEC, 0o666)
+    except PermissionError as exc:
+        try:
+            return os.open(name, os.O_RDONLY | os.O_CLOEXEC)
+        except OSError:
+            raise exc from None
+
+
 def lock(path, timeout=None, interval=None):
     """Take an exclusive lock on lock_path(path) and return it as a FileLock (D-4, D-5).
 
     Polls ``flock(LOCK_EX | LOCK_NB)`` every ``interval`` seconds (default
     LOCK_INTERVAL) for up to ``timeout`` seconds (default LOCK_TIMEOUT), then
     raises LockedError naming path. An OSError opening the lock file propagates.
-    The lock file is created if needed and left on disk.
+    The lock file is created if needed and left on disk; an existing one this
+    user cannot write is opened read-only, which is enough for flock.
     """
     if timeout is None:
         timeout = LOCK_TIMEOUT
     if interval is None:
         interval = LOCK_INTERVAL
-    fd = os.open(lock_path(path), os.O_RDWR | os.O_CREAT | os.O_CLOEXEC, 0o666)
+    fd = _open_lock_file(lock_path(path))
     try:
         deadline = time.monotonic() + timeout
         while True:

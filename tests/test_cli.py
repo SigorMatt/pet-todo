@@ -2,6 +2,7 @@
 
 import contextlib
 import datetime
+import errno
 import fcntl
 import io
 import json
@@ -1013,6 +1014,25 @@ class LockTest(CliTestCase):
                 self.assertEqual(self.run_cli(*argv),
                                  (1, "", "todo: cannot write {}\n".format(self.path)))
                 self.assertEqual(self.read(), self.ITEMS)
+
+    def test_lock_file_another_user_owns_still_saves(self):
+        # R2-1: the lock file exists but this user may not write it (say, root
+        # made it 0644); flock on a read-only descriptor still locks.
+        open(self.lock_path, "w").close()
+        real_open = os.open
+
+        def fake_open(name, flags, *args, **kwargs):
+            if name == self.lock_path and flags & (os.O_WRONLY | os.O_RDWR):
+                raise PermissionError(errno.EACCES, os.strerror(errno.EACCES), name)
+            return real_open(name, flags, *args, **kwargs)
+        for argv in self.CHANGES:
+            with self.subTest(argv=argv):
+                self.write(self.ITEMS)
+                with mock.patch.object(os, "open", fake_open):
+                    code, out, err = self.run_cli(*argv)
+                self.assertEqual((code, err), (0, ""))
+                self.assertNotEqual(self.read(), self.ITEMS)
+                self.assertTrue(self.lock_is_free())
 
     # c3: a busy lock times out; one released in time is waited for.
 
