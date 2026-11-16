@@ -10,7 +10,7 @@ step: plan
 pr: merged:4
 cursor: none
 counter: 0
-intent: none
+intent: post PLAN in room 5 after #6911752623
 waiting_for_owner: no
 status: running
 mission_started: 2026-11-15T18:19:07Z
