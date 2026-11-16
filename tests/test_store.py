@@ -1,8 +1,12 @@
 import contextlib
+import errno
+import fcntl
 import io
 import json
 import os
 import tempfile
+import threading
+import time
 import unittest
 from unittest import mock
 
@@ -321,6 +325,158 @@ class StoreTest(unittest.TestCase):
 
     def test_failed_replace_leaves_original_and_no_temp(self):
         self._assert_failed_write_keeps_original("todo.store.os.replace")
+
+
+class LockTest(unittest.TestCase):
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.path = os.path.join(tmp.name, "todo.json")
+
+    def _try_flock(self):
+        """True if a separate open file description can take the lock now (then drops it)."""
+        fd = os.open(self.path + ".lock", os.O_RDWR | os.O_CREAT)
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            return False
+        finally:
+            os.close(fd)
+        return True
+
+    def _hold(self):
+        """Hold the lock from a separate fd; return a function that releases it."""
+        fd = os.open(self.path + ".lock", os.O_RDWR | os.O_CREAT)
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        released = []
+
+        def release():
+            if not released:
+                released.append(True)
+                os.close(fd)
+        self.addCleanup(release)
+        return release
+
+    def test_lock_path_is_data_path_plus_lock(self):
+        self.assertEqual(store.lock_path("/a/b.json"), "/a/b.json.lock")
+
+    def test_lock_creates_lock_file_holds_and_releases(self):
+        with store.lock(self.path):
+            self.assertTrue(os.path.exists(self.path + ".lock"))
+            self.assertFalse(self._try_flock())
+        self.assertTrue(self._try_flock())
+        self.assertTrue(os.path.exists(self.path + ".lock"))
+        self.assertFalse(os.path.exists(self.path))
+
+    def test_lock_is_released_when_body_raises(self):
+        with self.assertRaises(RuntimeError):
+            with store.lock(self.path):
+                raise RuntimeError("boom")
+        self.assertTrue(self._try_flock())
+
+    def test_release_twice_is_harmless(self):
+        held = store.lock(self.path)
+        held.release()
+        held.release()
+        self.assertTrue(self._try_flock())
+
+    def test_busy_lock_times_out_with_data_path(self):
+        self._hold()
+        start = time.monotonic()
+        with self.assertRaises(store.LockedError) as cm:
+            store.lock(self.path, timeout=0.2, interval=0.01)
+        self.assertGreaterEqual(time.monotonic() - start, 0.2)
+        self.assertEqual(cm.exception.path, self.path)
+        self.assertEqual(str(cm.exception), "file is locked {}".format(self.path))
+
+    def test_defaults_come_from_module_constants(self):
+        self._hold()
+        with mock.patch.object(store, "LOCK_TIMEOUT", 0.1), \
+                mock.patch.object(store, "LOCK_INTERVAL", 0.01):
+            start = time.monotonic()
+            with self.assertRaises(store.LockedError):
+                store.lock(self.path)
+            self.assertLess(time.monotonic() - start, 2)
+
+    def test_lock_released_within_timeout_is_waited_for(self):
+        release = self._hold()
+        timer = threading.Timer(0.2, release)
+        timer.start()
+        self.addCleanup(timer.cancel)
+        start = time.monotonic()
+        with store.lock(self.path, timeout=5, interval=0.01):
+            self.assertGreaterEqual(time.monotonic() - start, 0.15)
+            self.assertFalse(self._try_flock())
+
+    @unittest.skipUnless(hasattr(os, "symlink"), "needs symlinks")
+    def test_lock_path_resolves_symlinks(self):
+        directory = os.path.dirname(self.path)
+        os.mkdir(os.path.join(directory, "sub"))
+        link = os.path.join(directory, "sub", "link.json")
+        os.symlink(self.path, link)
+        real = os.path.realpath(self.path)
+        self.assertEqual(store.lock_path(link), real + ".lock")
+        self.assertEqual(store.lock_path(self.path), real + ".lock")
+
+    @unittest.skipUnless(hasattr(os, "symlink"), "needs symlinks")
+    def test_symlink_and_target_take_the_same_lock(self):
+        link = os.path.join(os.path.dirname(self.path), "link.json")
+        os.symlink("todo.json", link)
+        with store.lock(link):
+            with self.assertRaises(store.LockedError) as cm:
+                store.lock(self.path, timeout=0.1, interval=0.01)
+            self.assertEqual(cm.exception.path, self.path)
+        self._hold()
+        with self.assertRaises(store.LockedError) as cm:
+            store.lock(link, timeout=0.1, interval=0.01)
+        self.assertEqual(cm.exception.path, link)
+        self.assertFalse(os.path.exists(link + ".lock"))
+
+    def test_unopenable_lock_file_raises_oserror(self):
+        path = os.path.join(os.path.dirname(self.path), "no", "t.json")
+        with self.assertRaises(OSError):
+            store.lock(path)
+
+    @unittest.skipUnless(hasattr(os, "mkfifo"), "needs FIFOs")
+    def test_non_regular_lock_file_raises_oserror(self):
+        # Qodo PR #8: a lock file that isn't a regular file is refused.
+        os.mkfifo(self.path + ".lock")
+        with self.assertRaises(OSError):
+            store.lock(self.path)
+
+    def _refuse_writing_lock_file(self, opened, err=errno.EACCES):
+        """Patch os.open to refuse write access to the lock file, as for another user's 0644 file.
+
+        Flags of the opens let through are appended to ``opened``.
+        """
+        real_open = os.open
+        lock_file = self.path + ".lock"
+
+        def fake_open(name, flags, *args, **kwargs):
+            if name == lock_file and flags & (os.O_WRONLY | os.O_RDWR):
+                raise PermissionError(err, os.strerror(err), name)
+            opened.append(flags)
+            return real_open(name, flags, *args, **kwargs)
+        return mock.patch.object(os, "open", fake_open)
+
+    def test_unwritable_lock_file_is_locked_read_only(self):
+        # R2-1: a lock file another user created (0644) still locks.
+        open(self.path + ".lock", "w").close()
+        for err in (errno.EACCES, errno.EPERM):
+            with self.subTest(err=err):
+                opened = []
+                with self._refuse_writing_lock_file(opened, err):
+                    held = store.lock(self.path)
+                self.assertEqual(opened[-1] & os.O_ACCMODE, os.O_RDONLY)
+                self.assertFalse(self._try_flock())
+                held.release()
+                self.assertTrue(self._try_flock())
+
+    def test_missing_lock_file_that_cannot_be_created_raises_permission_error(self):
+        with self._refuse_writing_lock_file([]):
+            with self.assertRaises(PermissionError):
+                store.lock(self.path)
+        self.assertFalse(os.path.exists(self.path + ".lock"))
 
 
 if __name__ == "__main__":

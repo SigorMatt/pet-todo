@@ -2,12 +2,16 @@
 
 import contextlib
 import datetime
+import errno
+import fcntl
 import io
 import json
 import os
 import subprocess
 import sys
 import tempfile
+import threading
+import time
 import unittest
 from unittest import mock
 
@@ -867,6 +871,343 @@ class EditSubprocessTest(CliTestCase):
                                  (1, b"", b"todo: bad text\n"))
                 with open(self.path, "rb") as f:
                     self.assertEqual(f.read(), before)
+
+
+class LockTest(CliTestCase):
+    """D-4 and D-5: changing commands lock <TODO_FILE>.lock around load and save."""
+
+    ITEMS = ('{"next_id": 3, "items": [{"id": 1, "text": "open", "done": false}, '
+             '{"id": 2, "text": "closed", "done": true}]}\n')
+
+    # Commands that succeed against ITEMS and change the file.
+    CHANGES = (["add", "x"], ["done", "1"], ["remove", "1"], ["edit", "1", "y"])
+
+    def setUp(self):
+        super().setUp()
+        self.lock_path = self.path + ".lock"
+        self.write(self.ITEMS)
+
+    def read(self):
+        with open(self.path, encoding="utf-8") as f:
+            return f.read()
+
+    def lock_is_free(self):
+        """True if a separate open file description can take the lock now (then drops it)."""
+        fd = os.open(self.lock_path, os.O_RDWR | os.O_CREAT)
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            return False
+        finally:
+            os.close(fd)
+        return True
+
+    def hold(self):
+        """Hold the lock from a separate fd, as another run would; return its release."""
+        fd = os.open(self.lock_path, os.O_RDWR | os.O_CREAT)
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        released = []
+
+        def release():
+            if not released:
+                released.append(True)
+                os.close(fd)
+        self.addCleanup(release)
+        return release
+
+    def short_timeout(self, seconds=0.2):
+        for name, value in (("LOCK_TIMEOUT", seconds), ("LOCK_INTERVAL", 0.01)):
+            patcher = mock.patch.object(store, name, value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+    @contextlib.contextmanager
+    def spy(self, replace_error=None):
+        """Record, at each load and rename, whether the lock was free.
+
+        With replace_error, the rename raises it instead of happening.
+        """
+        seen = []
+        real_load, real_replace = store.load, os.replace
+
+        def load(path, **kwargs):
+            seen.append(("load", self.lock_is_free()))
+            return real_load(path, **kwargs)
+
+        def replace(src, dst):
+            seen.append(("replace", self.lock_is_free()))
+            if replace_error is not None:
+                raise replace_error
+            return real_replace(src, dst)
+
+        with mock.patch("todo.store.load", side_effect=load), \
+                mock.patch("todo.store.os.replace", side_effect=replace):
+            yield seen
+
+    # c2: held across load and rename, released after success.
+
+    def test_lock_held_across_load_and_rename_and_released_after(self):
+        for argv in self.CHANGES:
+            with self.subTest(argv=argv):
+                self.write(self.ITEMS)
+                with self.spy() as seen:
+                    code, out, err = self.run_cli(*argv)
+                self.assertEqual((code, err), (0, ""))
+                self.assertEqual(seen, [("load", False), ("replace", False)])
+                self.assertTrue(self.lock_is_free())
+                self.assertTrue(os.path.exists(self.lock_path))
+
+    def test_done_twice_still_locks_and_releases(self):
+        with self.spy() as seen:
+            self.assertEqual(self.run_cli("done", "2"), (0, "done 2\n", ""))
+        self.assertEqual(seen, [("load", False)])
+        self.assertTrue(self.lock_is_free())
+
+    def test_first_add_creates_file_under_lock(self):
+        os.remove(self.path)
+        with self.spy() as seen:
+            self.assertEqual(self.run_cli("add", "x"), (0, "added 1\n", ""))
+        self.assertEqual(seen, [("load", False), ("replace", False)])
+        self.assertTrue(self.lock_is_free())
+
+    # c2: released after errors.
+
+    def test_lock_released_after_no_item(self):
+        for argv in (["done", "9"], ["remove", "9"], ["edit", "9", "y"]):
+            with self.subTest(argv=argv):
+                with self.spy() as seen:
+                    self.assertEqual(self.run_cli(*argv), (1, "", "todo: no item 9\n"))
+                self.assertEqual(seen, [("load", False)])
+                self.assertTrue(self.lock_is_free())
+                self.assertEqual(self.read(), self.ITEMS)
+
+    def test_lock_released_after_item_is_done(self):
+        with self.spy() as seen:
+            self.assertEqual(self.run_cli("edit", "2", "y"),
+                             (1, "", "todo: item 2 is done\n"))
+        self.assertEqual(seen, [("load", False)])
+        self.assertTrue(self.lock_is_free())
+        self.assertEqual(self.read(), self.ITEMS)
+
+    def test_lock_released_after_cannot_write(self):
+        for argv in self.CHANGES:
+            with self.subTest(argv=argv):
+                with self.spy(PermissionError("read-only")) as seen:
+                    self.assertEqual(self.run_cli(*argv),
+                                     (1, "", "todo: cannot write {}\n".format(self.path)))
+                self.assertEqual(seen, [("load", False), ("replace", False)])
+                self.assertTrue(self.lock_is_free())
+                self.assertEqual(self.read(), self.ITEMS)
+
+    def test_lock_released_after_cannot_read(self):
+        self.write("not json")
+        for argv in self.CHANGES:
+            with self.subTest(argv=argv):
+                self.assertEqual(self.run_cli(*argv),
+                                 (1, "", "todo: cannot read {}\n".format(self.path)))
+                self.assertTrue(self.lock_is_free())
+
+    def test_unopenable_lock_file_cannot_write(self):
+        os.mkdir(self.lock_path)
+        for argv in self.CHANGES:
+            with self.subTest(argv=argv):
+                self.assertEqual(self.run_cli(*argv),
+                                 (1, "", "todo: cannot write {}\n".format(self.path)))
+                self.assertEqual(self.read(), self.ITEMS)
+
+    def test_lock_file_another_user_owns_still_saves(self):
+        # R2-1: the lock file exists but this user may not write it (say, root
+        # made it 0644); flock on a read-only descriptor still locks.
+        open(self.lock_path, "w").close()
+        real_open = os.open
+
+        def fake_open(name, flags, *args, **kwargs):
+            if name == self.lock_path and flags & (os.O_WRONLY | os.O_RDWR):
+                raise PermissionError(errno.EACCES, os.strerror(errno.EACCES), name)
+            return real_open(name, flags, *args, **kwargs)
+        for argv in self.CHANGES:
+            with self.subTest(argv=argv):
+                self.write(self.ITEMS)
+                with mock.patch.object(os, "open", fake_open):
+                    code, out, err = self.run_cli(*argv)
+                self.assertEqual((code, err), (0, ""))
+                self.assertNotEqual(self.read(), self.ITEMS)
+                self.assertTrue(self.lock_is_free())
+
+    @unittest.skipUnless(hasattr(os, "mkfifo"), "needs FIFOs")
+    def test_fifo_lock_file_this_user_cannot_write_gives_cannot_write_promptly(self):
+        # Qodo PR #8 (cold M6 S1-1): a FIFO planted at the lock path, which this
+        # user may not open for writing, must not hang the read-only fallback.
+        os.mkfifo(self.lock_path)
+        script = (
+            "import errno, os, sys\n"
+            "from todo import cli\n"
+            "lock_file, real_open = sys.argv[1], os.open\n"
+            "def fake_open(name, flags, *args, **kwargs):\n"
+            "    if name == lock_file and flags & (os.O_WRONLY | os.O_RDWR):\n"
+            "        raise PermissionError(errno.EACCES, os.strerror(errno.EACCES), name)\n"
+            "    return real_open(name, flags, *args, **kwargs)\n"
+            "os.open = fake_open\n"
+            "sys.exit(cli.main(sys.argv[2:]))\n")
+        for argv in self.CHANGES:
+            with self.subTest(argv=argv):
+                try:
+                    result = subprocess.run(
+                        [sys.executable, "-c", script, self.lock_path] + argv,
+                        cwd=ROOT, capture_output=True, text=True, timeout=10)
+                except subprocess.TimeoutExpired:
+                    self.fail("hung opening a FIFO lock file")
+                self.assertEqual((result.returncode, result.stdout, result.stderr),
+                                 (1, "", "todo: cannot write {}\n".format(self.path)))
+                self.assertEqual(self.read(), self.ITEMS)
+
+    # c3: a busy lock times out; one released in time is waited for.
+
+    def test_busy_lock_gives_file_is_locked_and_leaves_file(self):
+        self.hold()
+        self.short_timeout()
+        for argv in self.CHANGES:
+            with self.subTest(argv=argv):
+                start = time.monotonic()
+                self.assertEqual(self.run_cli(*argv),
+                                 (1, "", "todo: file is locked {}\n".format(self.path)))
+                self.assertGreaterEqual(time.monotonic() - start, 0.2)
+                self.assertEqual(self.read(), self.ITEMS)
+
+    def test_lock_released_within_timeout_is_waited_for(self):
+        self.short_timeout(5)
+        for argv in self.CHANGES:
+            with self.subTest(argv=argv):
+                self.write(self.ITEMS)
+                timer = threading.Timer(0.2, self.hold())
+                timer.start()
+                self.addCleanup(timer.cancel)
+                start = time.monotonic()
+                code, out, err = self.run_cli(*argv)
+                self.assertEqual((code, err), (0, ""))
+                self.assertGreaterEqual(time.monotonic() - start, 0.15)
+                self.assertNotEqual(self.read(), self.ITEMS)
+
+    def test_list_takes_no_lock(self):
+        self.hold()
+        self.short_timeout()
+        self.assertEqual(self.run_cli("list"), (0, "1 [ ] open\n", ""))
+
+    def test_argument_checks_run_before_the_lock(self):
+        self.hold()
+        self.short_timeout(30)
+        cases = ((["add", ""], "todo: bad text\n"),
+                 (["add", "x", "--due", "2026-13-01"], "todo: bad date 2026-13-01\n"),
+                 (["done", "01"], "todo: bad id 01\n"),
+                 (["remove", "x"], "todo: bad id x\n"),
+                 (["edit", "0", "y"], "todo: bad id 0\n"),
+                 (["edit", "1", "a\tb"], "todo: bad text\n"))
+        for argv, err in cases:
+            with self.subTest(argv=argv):
+                start = time.monotonic()
+                self.assertEqual(self.run_cli(*argv), (1, "", err))
+                self.assertLess(time.monotonic() - start, 5)
+
+    def test_lock_held_by_another_process(self):
+        self.short_timeout()
+        holder = subprocess.Popen(
+            [sys.executable, "-c",
+             "import fcntl, os, sys\n"
+             "fd = os.open(sys.argv[1], os.O_RDWR | os.O_CREAT)\n"
+             "fcntl.flock(fd, fcntl.LOCK_EX)\n"
+             "print('held', flush=True)\n"
+             "sys.stdin.read()\n",
+             self.lock_path],
+            stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True,
+        )
+        self.addCleanup(holder.kill)
+        self.assertEqual(holder.stdout.readline(), "held\n")
+        self.assertEqual(self.run_cli("add", "x"),
+                         (1, "", "todo: file is locked {}\n".format(self.path)))
+        self.assertEqual(self.read(), self.ITEMS)
+        holder.stdin.close()
+        holder.wait(30)
+        holder.stdout.close()
+        self.assertEqual(self.run_cli("add", "x"), (0, "added 3\n", ""))
+
+    # Cold M6 R1-1, R1-2: the lock is keyed on the resolved data file.
+
+    def link_to_data_file(self, directory):
+        """A symlink to the data file at path, in a new subdirectory of the test's directory."""
+        sub = os.path.join(os.path.dirname(self.path), directory)
+        os.mkdir(sub)
+        link = os.path.join(sub, "link.json")
+        os.symlink(self.path, link)
+        return link
+
+    @unittest.skipUnless(hasattr(os, "symlink"), "needs symlinks")
+    def test_symlink_and_target_take_the_same_lock(self):
+        link = self.link_to_data_file("links")
+        self.hold()
+        self.short_timeout()
+        with mock.patch.dict(os.environ, {"TODO_FILE": link}):
+            for argv in self.CHANGES:
+                with self.subTest(argv=argv):
+                    self.assertEqual(self.run_cli(*argv),
+                                     (1, "", "todo: file is locked {}\n".format(link)))
+                    self.assertEqual(self.read(), self.ITEMS)
+
+    @unittest.skipUnless(hasattr(os, "symlink"), "needs symlinks")
+    def test_symlink_saves_when_no_lock_file_can_sit_beside_it(self):
+        # The link's directory cannot hold link.json.lock (here a directory is in
+        # the way, as a read-only directory would be); the target's can.
+        link = self.link_to_data_file("links")
+        os.mkdir(link + ".lock")
+        with mock.patch.dict(os.environ, {"TODO_FILE": link}):
+            for argv in self.CHANGES:
+                with self.subTest(argv=argv):
+                    self.write(self.ITEMS)
+                    code, out, err = self.run_cli(*argv)
+                    self.assertEqual((code, err), (0, ""))
+                    self.assertNotEqual(self.read(), self.ITEMS)
+                    self.assertTrue(os.path.islink(link))
+        self.assertTrue(os.path.isfile(self.lock_path))
+
+
+    @unittest.skipUnless(hasattr(os, "symlink"), "needs symlinks")
+    def test_link_retargeted_after_the_lock_still_changes_the_locked_file(self):
+        # Qodo PR #8: the file loaded and saved is the one whose lock is held,
+        # even if the link is pointed elsewhere once the lock is taken.
+        link = self.link_to_data_file("links")
+        other = os.path.join(os.path.dirname(self.path), "other.json")
+        real_lock = store.lock
+
+        def lock_then_retarget(*args, **kwargs):
+            held = real_lock(*args, **kwargs)
+            os.remove(link)
+            os.symlink(other, link)
+            return held
+        with mock.patch.dict(os.environ, {"TODO_FILE": link}), \
+                mock.patch.object(store, "lock", side_effect=lock_then_retarget):
+            for argv in self.CHANGES:
+                with self.subTest(argv=argv):
+                    os.remove(link)
+                    os.symlink(self.path, link)
+                    self.write(self.ITEMS)
+                    with open(other, "w", encoding="utf-8") as f:
+                        f.write(self.ITEMS)
+                    code, out, err = self.run_cli(*argv)
+                    self.assertEqual((code, err), (0, ""))
+                    self.assertNotEqual(self.read(), self.ITEMS)
+                    with open(other, encoding="utf-8") as f:
+                        self.assertEqual(f.read(), self.ITEMS)
+
+    @unittest.skipUnless(hasattr(os, "symlink"), "needs symlinks")
+    def test_errors_name_the_link_as_given(self):
+        link = self.link_to_data_file("links")
+        with mock.patch.dict(os.environ, {"TODO_FILE": link}):
+            self.write("not json")
+            self.assertEqual(self.run_cli("add", "x"),
+                             (1, "", "todo: cannot read {}\n".format(link)))
+            self.write(self.ITEMS)
+            with mock.patch("todo.store.os.replace", side_effect=PermissionError("ro")):
+                self.assertEqual(self.run_cli("add", "x"),
+                                 (1, "", "todo: cannot write {}\n".format(link)))
 
 
 if __name__ == "__main__":

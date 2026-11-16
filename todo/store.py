@@ -1,11 +1,14 @@
 """Load and save the to-do list; the only module that touches the file."""
 
 import datetime
+import errno
+import fcntl
 import json
 import os
 import re
 import stat
 import tempfile
+import time
 
 
 # The largest item ID a valid file may hold (next_id may be one more): the
@@ -22,15 +25,137 @@ class StoreError(Exception):
         super().__init__(message or "cannot read {}".format(path))
 
 
+class LockedError(Exception):
+    """Another run held the lock for the data file at ``path`` past the timeout (D-5)."""
+
+    def __init__(self, path):
+        self.path = path
+        super().__init__("file is locked {}".format(path))
+
+
+# D-5: how long a changing command waits for the lock, and how often it retries.
+# Read on every call, so tests can patch them.
+LOCK_TIMEOUT = 5.0
+LOCK_INTERVAL = 0.05
+
+
+def resolve(path):
+    """The data file path names, with symlinks resolved (as save resolves them).
+
+    A changing command resolves its path once and passes the result as
+    ``target`` to lock, load and save, so all three act on the same file even
+    if a link is retargeted meanwhile; messages keep naming path.
+    """
+    return os.path.realpath(path)
+
+
+def lock_path(path):
+    """The lock file for the data file at path: its resolved path plus ``.lock`` (D-4).
+
+    Symlinks are resolved as save resolves them, so every name for one data
+    file takes the same lock, and the lock file sits beside the file written.
+    """
+    return resolve(path) + ".lock"
+
+
+class FileLock:
+    """An exclusive flock held on an open lock file; a context manager that releases it."""
+
+    def __init__(self, fd):
+        self._fd = fd
+
+    def release(self):
+        """Unlock and close the lock file; calling it again does nothing."""
+        fd, self._fd = self._fd, None
+        if fd is None:
+            return
+        try:
+            fcntl.flock(fd, fcntl.LOCK_UN)
+        finally:
+            os.close(fd)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc_info):
+        self.release()
+
+
+def _open_lock_file(name):
+    """Open (creating if missing) the lock file and return its descriptor.
+
+    flock needs no write access, so an existing lock file this user may not
+    write (say, one another user created) is opened read-only instead. Any
+    other failure raises the OSError from the read-write open. Both opens are
+    non-blocking, so a FIFO planted at name cannot stall them, and anything
+    but a regular file is refused with an OSError (flock itself never blocks:
+    lock polls with LOCK_NB, so O_NONBLOCK is left set).
+    """
+    flags = os.O_NONBLOCK | os.O_CLOEXEC
+    try:
+        fd = os.open(name, os.O_RDWR | os.O_CREAT | flags, 0o666)
+    except PermissionError as exc:
+        try:
+            fd = os.open(name, os.O_RDONLY | flags)
+        except OSError:
+            raise exc from None
+    try:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            raise OSError(errno.EINVAL, "lock file is not a regular file", name)
+    except BaseException:
+        os.close(fd)
+        raise
+    return fd
+
+
+def lock(path, timeout=None, interval=None, target=None):
+    """Take an exclusive lock on lock_path(path) and return it as a FileLock (D-4, D-5).
+
+    With ``target`` (path as resolve gave it), the lock file is target plus
+    ``.lock``, and path is resolved no further; path still names the error.
+
+    Polls ``flock(LOCK_EX | LOCK_NB)`` every ``interval`` seconds (default
+    LOCK_INTERVAL) for up to ``timeout`` seconds (default LOCK_TIMEOUT), then
+    raises LockedError naming path. An OSError opening the lock file propagates.
+    The lock file is created if needed and left on disk; an existing one this
+    user cannot write is opened read-only, which is enough for flock. A lock
+    file that isn't a regular file raises OSError.
+    """
+    if timeout is None:
+        timeout = LOCK_TIMEOUT
+    if interval is None:
+        interval = LOCK_INTERVAL
+    name = lock_path(path) if target is None else target + ".lock"
+    fd = _open_lock_file(name)
+    try:
+        deadline = time.monotonic() + timeout
+        while True:
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                return FileLock(fd)
+            except BlockingIOError:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise LockedError(path) from None
+                time.sleep(min(interval, remaining))
+    except BaseException:
+        os.close(fd)
+        raise
+
+
 def default_path():
     """Return $TODO_FILE if set, else ./todo.json."""
     return os.environ.get("TODO_FILE") or "todo.json"
 
 
-def load(path):
-    """Return the list stored at path; a missing file gives an empty list."""
+def load(path, target=None):
+    """Return the list stored at path; a missing file gives an empty list.
+
+    With ``target`` (path as resolve gave it), that file is read instead;
+    path still names the error.
+    """
     try:
-        with open(path, encoding="utf-8") as f:
+        with open(path if target is None else target, encoding="utf-8") as f:
             data = json.load(f)
     except FileNotFoundError:
         return {"next_id": 1, "items": []}
@@ -108,12 +233,14 @@ def _file_mode(path):
         return 0o666 & ~umask
 
 
-def save(path, data):
+def save(path, data, target=None):
     """Write data to path atomically: a temp file in the same directory, then os.replace.
 
-    A symlinked path is resolved first, so the link stays and its target is replaced.
+    A symlinked path is resolved first, so the link stays and its target is
+    replaced; with ``target`` (path as resolve gave it), that file is replaced.
     """
-    target = os.path.realpath(path)
+    if target is None:
+        target = resolve(path)
     directory = os.path.dirname(target)
     mode = _file_mode(target)
     fd, tmp = tempfile.mkstemp(prefix=".todo-", suffix=".tmp", dir=directory)
