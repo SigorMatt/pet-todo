@@ -6,11 +6,11 @@ lease_generation: 5
 phase: 2
 room: 5
 mission: M3
-step: plan
+step: spec
 pr: merged:4
 cursor: none
 counter: 0
-intent: post PLAN in room 5 after #6911752623
+intent: none
 waiting_for_owner: no
 status: running
 mission_started: 2026-11-15T18:19:07Z
