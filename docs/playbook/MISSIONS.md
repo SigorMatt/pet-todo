@@ -53,6 +53,7 @@ Owned by the lead. Only `room.py` edits the block above (`state set`, `state nex
 - `edit` check order: bad id, bad text, then load, then no item, then item is done (D-6 check after lookup).
 - Lock timeout and poll interval are injectable through `store.LOCK_TIMEOUT` / `store.LOCK_INTERVAL` (and `store.lock()` arguments), not a `cli.main` parameter (playbook: lead's discretion).
 - A lock file that can't be opened (missing or read-only directory) gives `todo: cannot write <path>` for every changing command, before the item lookup; so `done 9` in a read-only directory says `cannot write`, not `no item` (the change can't be made either way).
+- Changing commands resolve the data path once and use that target for lock, load and save (qodo PR #8: Retargeted links can lose additions); a non-regular lock file is refused as `cannot write` (qodo PR #8: A planted lock file can hang changes).
 - Lock path is the resolved data file plus `.lock` (`realpath($TODO_FILE) + ".lock"`), so every name for one data file shares one lock (cold M6 R1-1, R1-2; supersedes the earlier literal-path choice). Messages still name the path as given. The lock file stays on disk (lock file mode is lead's discretion). An existing lock file that can't be opened for writing is opened read-only, since `flock` needs no write access (cold M6 R2-1).
 
 ## Current mission
@@ -77,7 +78,7 @@ Owned by the lead. Only `room.py` edits the block above (`state set`, `state nex
 | M6-T2 | builder ab9d0b147964089bd (worktree) | 1 | merged (1f611b2) |
 | M6-F1 (cold R1-1, R1-2) | builder a88d74440d1287ae4 (worktree) | 1 | merged (65be81c) |
 | M6-F2 (cold R2-1) | builder a85339448c3e42c50 (worktree) | 1 | merged (2e9f0d6) |
-| M6-Q1 (qodo PR #8 #1, #3) | builder (worktree) | 1 | running |
+| M6-Q1 (qodo PR #8 #1, #3) | builder aa8f07be56e43fd14 (worktree) | 1 | merged (819eaab, 3e0aa0f) |
 
 ### Parked questions
 
