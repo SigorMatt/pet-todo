@@ -101,6 +101,10 @@ def _build_parser():
 
     remove = commands.add_parser("remove", help="delete an item")
     remove.add_argument("id", help="the item's ID")
+
+    edit = commands.add_parser("edit", help="replace an item's text")
+    edit.add_argument("id", help="the item's ID")
+    edit.add_argument("text", help="the new text")
     return parser
 
 
@@ -188,11 +192,22 @@ def _cmd_remove(args, path):
     print("removed {}".format(item["id"]))
 
 
+def _cmd_edit(args, path):
+    item_id = parse_id(args.id)
+    check_text(args.text)
+    data = store.load(path)
+    item = data["items"][_find(data, item_id)]
+    item["text"] = args.text
+    _save(path, data)
+    print("edited {}".format(item["id"]))
+
+
 _COMMANDS = {
     "add": _cmd_add,
     "list": _cmd_list,
     "done": _cmd_done,
     "remove": _cmd_remove,
+    "edit": _cmd_edit,
 }
 
 
@@ -206,6 +221,25 @@ def _protect_id(argv):
     """
     if len(argv) == 2 and argv[0] in _ID_COMMANDS and argv[1].startswith("-"):
         return [argv[0], "--", argv[1]]
+    return _protect_edit_id(argv)
+
+
+def _protect_edit_id(argv):
+    """Mark a dash-led ID after edit as positional, so ``edit -x TEXT`` is ``bad id -x``.
+
+    Only ``edit ID TEXT`` with TEXT not dash-led, and ``edit ID -- TEXT``, are
+    rewritten; dash-led TEXT without ``--`` stays a usage error, as for add.
+    A leading ``--`` (``edit -- 1 TEXT``) already ends option parsing.
+    """
+    if len(argv) < 3 or argv[0] != "edit":
+        return argv
+    raw = argv[1]
+    if not raw.startswith("-") or raw == "--":
+        return argv
+    if len(argv) == 3 and not argv[2].startswith("-"):
+        return ["edit", "--", raw, argv[2]]
+    if len(argv) == 4 and argv[2] == "--":
+        return ["edit", "--", raw, argv[3]]
     return argv
 
 
